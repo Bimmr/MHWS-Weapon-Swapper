@@ -2,21 +2,29 @@ local version = "0.0.1"
 
 local config = require("WeaponSwapper.Config")
 local bindings = require("WeaponSwapper.Bindings")
-local soundManager, battleMusicManager
+
+local action_id_type = sdk.find_type_definition("ace.ACTION_ID")
+
+local sound_manager = sdk.get_managed_singleton("app.SoundMusicManager")
+local battle_music_manager
 
 local swap_weapon = false
 
 -- Check if the player is in battle
 local function is_in_battle()
-    if soundManager == nil then
-        soundManager = sdk.get_managed_singleton("app.SoundMusicManager")
+    if battle_music_manager == nil then
+        battle_music_manager = sound_manager:get_BattleMusic()
     end
-    if soundManager == nil then return false end
-    if battleMusicManager == nil then
-        battleMusicManager = soundManager:get_BattleMusic()
-    end
-    if battleMusicManager == nil then return false end
-    return battleMusicManager:get_IsBattle()
+    if battle_music_manager == nil then return false end
+    return battle_music_manager:get_IsBattle()
+end
+
+-- Function to stop the current action
+local function stop_action(player)
+    local action_id = ValueType.new(action_id_type)
+    sdk.set_native_field(action_id, action_id_type, "_Category", 1)
+    sdk.set_native_field(action_id, action_id_type, "_Index", 14)
+    player:changeActionRequest(0, action_id, false)
 end
 
 -- Request to swap weapon
@@ -110,15 +118,6 @@ re.on_frame(function()
     -- Update the bindings
     bindings.update()
 end)
-
-local function stop_action(player)
-    local ActionIDType = sdk.find_type_definition("ace.ACTION_ID")
-    local instance = ValueType.new(ActionIDType)
-    sdk.set_native_field(instance, ActionIDType, "_Category", 1)
-    sdk.set_native_field(instance, ActionIDType, "_Index", 14)
-    player:changeActionRequest(0, instance, false)
-end
-
 
 -- Hook the update function of the HunterCharacter
 -- This will allow us to swap the weapon when the swap_weapon flag is set
