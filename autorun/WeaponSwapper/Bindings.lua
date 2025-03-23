@@ -11,7 +11,6 @@ local KEYBOARD = 2
 local PLAYSTATION = 1
 local XBOX = 2
 
-
 local function generate_enum(typename)
     local t = sdk.find_type_definition(typename)
     if not t then return {} end
@@ -29,16 +28,11 @@ end
 
 -- Generate the enums for the bindings
 
-
 -- ======= Listeners ==========
 local listeners = {}
 
 -- ========== Example usage ============
 -- local listen = bindings.listener.create("hotkey")
-
--- listen.on_listen(function(inputs)
---     print("Inputs", inputs)
--- end)
 
 -- listen.on_complete(function()
 --     print("Complete")
@@ -47,7 +41,6 @@ local listeners = {}
 -- if imgui.button("Listen") then
 --     listen.start()
 -- end
-
 
 local listener = {}
 
@@ -58,15 +51,16 @@ function listener.create(id)
     self.listening = false
     self.device = 0
     self.inputs = {}
-    self.listen = function() end
     self.complete = function() end
 
-    setmetatable(self, {__index = listener})
+    setmetatable(self, {
+        __index = listener
+    })
 
     if not listeners[id] then
         listeners[id] = self
         return self
-    else 
+    else
         return listeners[id]
     end
 end
@@ -92,11 +86,6 @@ function listener.is_listening()
     return listener.listening
 end
 
--- Call back while listener is listening
-function listener.on_listen(callback)
-    listener.listen = callback
-end
-
 -- Call back when listener is complete
 function listener.on_complete(callback)
     listener.complete = callback
@@ -114,14 +103,12 @@ end
 -- Update the listener
 function listener.update()
 
-    if not listener.listening then return end
-   
+    if not listener.listening then
+        return
+    end
+
     local current = bindings.get_current()
     if not current then return end
-
-    if listener.listen then
-        listener.listen()
-    end
 
     if #current > 0 then
         listener.inputs = current
@@ -135,7 +122,6 @@ end
 
 bindings.listeners = listeners
 bindings.listener = listener
-
 
 -- ======= Keyboard Manager ==========
 local keyboard_enum = generate_enum("via.hid.KeyboardKey")
@@ -161,11 +147,12 @@ end
 -- Get the current keys in an array with the names
 --- Will return the current_table table if not enough time has passed since the last check
 function keyboard_bindings.get_current()
-   
+
     local keyboard = sdk.call_native_func(native_keyboard, type_keyboard, "get_Device")
 
     -- Cache the keys for the delay - allows for easier setting/reading of binds
-    if keyboard_bindings.current ~= nil and keyboard_bindings.current_last_check ~= nil and keyboard_bindings.current_last_check + bindings.delay > os.clock() then
+    if keyboard_bindings.current ~= nil and keyboard_bindings.current_last_check ~= nil and
+        keyboard_bindings.current_last_check + bindings.delay > os.clock() then
         return keyboard_bindings.current
     end
 
@@ -183,7 +170,7 @@ end
 
 -- Return true or false depending on if the items in the passed table were just triggered
 function keyboard_bindings.is_triggered(data)
-    
+
     local current = keyboard_bindings.get_current()
     local previous = keyboard_bindings.get_previous()
 
@@ -204,16 +191,13 @@ function keyboard_bindings.is_triggered(data)
     end
 
     -- If not all current keys match the trigger
-    if matches ~= #data then
-        return false
-    end
+    if matches ~= #data then return false end
 
     -- If no previous keys were found
-    if #keyboard_bindings.previous == 0 then
-        return true
-    end
+    if #keyboard_bindings.previous == 0 then return true end
 
-    return previous_matches < #data   
+    -- Previous has less matches than the current
+    return previous_matches < #data
 end
 
 -- Return true or false depending on if the items in the passed table are currently pressed
@@ -226,9 +210,7 @@ function keyboard_bindings.is_down(data)
                 found = true
             end
         end
-        if not found then
-            return false
-        end
+        if not found then return false end
     end
     return true
 end
@@ -249,10 +231,7 @@ controller_bindings.previous = {}
 controller_bindings.bindings = {}
 
 -- Buttons to ignore, can't remove from enum as the code would be wrong then
-local ignore_buttons = {
-    "Cancel",
-    "Decide"
-}
+local ignore_buttons = {"Cancel", "Decide"}
 
 -- Button names to replace [DefaultName] = {"Playstation", "Xbox"}
 local to_replace_buttons = {
@@ -268,15 +247,12 @@ local to_replace_buttons = {
     ["LTrigTop"] = {"L1", "LB"},
     ["RTrigTop"] = {"R1", "RB"},
     ["LStickPush"] = {"L3", "LS"},
-    ["RStickPush"] = {"R3", "RS"},
+    ["RStickPush"] = {"R3", "RS"}
 }
-print("Controller Enum", json.dump_string(controller_enum))
 
 -- Get the controller type
 local function get_controller_type()
-    if controller_type ~= 0 then
-        return controller_type
-    end
+    if controller_type ~= 0 then return controller_type end
 
     local manager = sdk.get_managed_singleton("ace.PadManager")
     local controller = manager:get_MainPad()
@@ -284,16 +260,19 @@ local function get_controller_type()
     local type = {}
     for name, id in pairs(controller_types) do
         if id == type_id then
-            type = {name = name, id = type_id}
+            type = {
+                name = name,
+                id = type_id
+            }
             break
         end
     end
-    
+
     if string.find(type.name, "Dual") then
         controller_type = PLAYSTATION
     elseif string.find(type.name, "Xbox") then
         controller_type = XBOX
-    else 
+    else
         controller_type = 0
     end
     return controller_type
@@ -306,8 +285,6 @@ for key, values in pairs(to_replace_buttons) do
         controller_enum[key] = nil
     end
 end
-
-
 
 -- Check if the controller is currently in use
 function controller_bindings.is_currently_in_use()
@@ -340,9 +317,7 @@ local function get_button_names(code)
         end
 
         -- If we couldn't find a bigger code, then we must have all the possible ones
-        if largest.code == 0 then
-            break
-        end
+        if largest.code == 0 then break end
 
         -- Remove the largest and add it to the list of btns as long as it's not in the ignore list
         code = code - largest.code
@@ -352,9 +327,7 @@ local function get_button_names(code)
                 ignore = true
             end
         end
-        if not ignore then
-            table.insert(btns, largest.name)
-        end
+        if not ignore then table.insert(btns, largest.name) end
     end
     if #btns > 0 then
         return btns
@@ -368,19 +341,18 @@ end
 
 -- Get current buttons pressed as code
 function controller_bindings.get_current()
-    
+
     local controller = sdk.call_native_func(native_controller, type_controller, "get_MergedDevice")
 
     -- Cache the buttons for the delay - allows for easier setting/reading of binds
-    if controller_bindings.current ~= nil and controller_bindings.current_last_check ~= nil and controller_bindings.current_last_check + bindings.delay > os.clock() then
+    if controller_bindings.current ~= nil and controller_bindings.current_last_check ~= nil and
+        controller_bindings.current_last_check + bindings.delay > os.clock() then
         return controller_bindings.current
     end
 
     local current_code = controller:get_Button()
 
-    if current_code == 0 then
-        current_code = -1
-    end
+    if current_code == 0 then current_code = -1 end
 
     local current = get_button_names(current_code)
 
@@ -388,8 +360,6 @@ function controller_bindings.get_current()
     controller_bindings.current_last_check = os.clock()
     return current
 end
-
-
 
 -- Return true or false depending on if the items in the passed table were just triggered
 function controller_bindings.is_triggered(data)
@@ -413,16 +383,12 @@ function controller_bindings.is_triggered(data)
     end
 
     -- If not all current keys match the trigger
-    if matches ~= #data then
-        return false
-    end
+    if matches ~= #data then return false end
 
     -- If no previous keys were found
-    if #controller_bindings.get_previous() == 0 then
-        return true
-    end
+    if #controller_bindings.get_previous() == 0 then return true end
 
-    -- If all but one key is the same
+    -- Previous has less matches than the current
     return previous_matches < #data
 end
 
@@ -430,13 +396,19 @@ end
 
 -- Add the keyboard bindings
 function bindings.add_keyboard(keys, callback)
-    local data = {input = keys, callback = callback}
+    local data = {
+        input = keys,
+        callback = callback
+    }
     table.insert(keyboard_bindings.bindings, data)
 end
 
 -- Add the controller bindings
 function bindings.add_controller(buttons, callback)
-    local data = {input = buttons, callback = callback}
+    local data = {
+        input = buttons,
+        callback = callback
+    }
     table.insert(controller_bindings.bindings, data)
 end
 
@@ -495,12 +467,8 @@ end
 --- 1 = Controller
 --- 2 = Keyboard
 function bindings.get_current_device()
-    if bindings.is_keyboard() then
-        return KEYBOARD
-    end
-    if bindings.is_controller() then
-        return CONTROLLER
-    end
+    if bindings.is_keyboard() then return KEYBOARD end
+    if bindings.is_controller() then return CONTROLLER end
     return 0
 end
 
@@ -553,7 +521,7 @@ function bindings.update()
             end
         end
     end
-    
+
     if bindings.is_controller() then
         for _, data in pairs(controller_bindings.bindings) do
             if controller_bindings.is_triggered(data.input) then
