@@ -92,7 +92,7 @@ re.on_draw_ui(function()
         
         -- Display the hotkey string, and the change hotkey button
         imgui.push_id("WeaponSwapper")
-        imgui.indent(5)
+        imgui.indent(2)
 
         imgui.begin_disabled()
         imgui.input_text("", hotkey_string)
@@ -105,7 +105,7 @@ re.on_draw_ui(function()
         end
 
         imgui.spacing()
-        imgui.unindent(5)
+        imgui.unindent(2)
 
         imgui.pop_id()
     end
