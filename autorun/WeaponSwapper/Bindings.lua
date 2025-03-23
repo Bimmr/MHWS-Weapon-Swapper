@@ -8,6 +8,8 @@ bindings.delay = 0.1
 -- Just helper variables to make device numbers easier
 local CONTROLLER = 1
 local KEYBOARD = 2
+local PLAYSTATION = 1
+local XBOX = 2
 
 
 local function generate_enum(typename)
@@ -26,8 +28,6 @@ local function generate_enum(typename)
 end
 
 -- Generate the enums for the bindings
-controller_bindings.enum = generate_enum("ace.ACE_PAD_KEY.BITS")
-keyboard_bindings.enum = generate_enum("ace.ACE_MKB_KEY.INDEX")
 
 
 -- ======= Listeners ==========
@@ -138,6 +138,10 @@ bindings.listener = listener
 
 
 -- ======= Keyboard Manager ==========
+local keyboard_enum = generate_enum("via.hid.KeyboardKey")
+local native_keyboard = sdk.get_native_singleton("via.hid.Keyboard")
+local type_keyboard = sdk.find_type_definition("via.hid.Keyboard")
+
 keyboard_bindings.current = {}
 keyboard_bindings.current_last_check = nil
 keyboard_bindings.previous = {}
@@ -157,28 +161,18 @@ end
 -- Get the current keys in an array with the names
 --- Will return the current_table table if not enough time has passed since the last check
 function keyboard_bindings.get_current()
-
-    if keyboard_bindings.manager == nil then
-        keyboard_bindings.manager = sdk.get_managed_singleton("ace.MouseKeyboardManager")
-    end
-    if keyboard_bindings.main == nil then
-        keyboard_bindings.main = keyboard_bindings.manager:get_MainMouseKeyboard()
-    end
-
+   
+    local keyboard = sdk.call_native_func(native_keyboard, type_keyboard, "get_Device")
 
     -- Cache the keys for the delay - allows for easier setting/reading of binds
     if keyboard_bindings.current ~= nil and keyboard_bindings.current_last_check ~= nil and keyboard_bindings.current_last_check + bindings.delay > os.clock() then
         return keyboard_bindings.current
     end
 
-    local current_list = keyboard_bindings.main:get_field("_Keys")
     local current = {}
-    for key_name, key_code in pairs(keyboard_bindings.enum) do
-        current_list:get_Item(key_code)
-        if current_list:get_Item(key_code):get_field("_On") then
-            if not string.match(key_name, "CLICK") then
-                table.insert(current, key_name)
-            end
+    for key_name, key_code in pairs(keyboard_enum) do
+        if keyboard:isDown(key_code) then
+            table.insert(current, key_name)
         end
     end
 
@@ -240,11 +234,79 @@ function keyboard_bindings.is_down(data)
 end
 
 -- ======= Controller ==========
+local controller_enum = generate_enum("via.hid.GamePadButton")
+
+local controller_types = generate_enum("via.hid.DeviceKindDetails")
+local controller_type = 0
+
+local native_controller = sdk.get_native_singleton("via.hid.GamePad")
+local type_controller = sdk.find_type_definition("via.hid.GamePad")
+
 controller_bindings.current = {}
 controller_bindings.current_last_check = nil
 controller_bindings.previous = {}
 
 controller_bindings.bindings = {}
+
+-- Buttons to ignore, can't remove from enum as the code would be wrong then
+local ignore_buttons = {
+    "Cancel",
+    "Decide"
+}
+
+-- Button names to replace [DefaultName] = {"Playstation", "Xbox"}
+local to_replace_buttons = {
+    ["RRight"] = {"Circle", "B"},
+    ["RDown"] = {"X", "A"},
+    ["RLeft"] = {"Square", "X"},
+    ["RUp"] = {"Triangle", "Y"},
+    ["CLeft"] = {"Share", "Back"},
+    ["CRight"] = {"Start", "Start"},
+    ["CCenter"] = {"Touchpad", "Guide"},
+    ["LTrigBottom"] = {"L2", "LT"},
+    ["RTrigBottom"] = {"R2", "RT"},
+    ["LTrigTop"] = {"L1", "LB"},
+    ["RTrigTop"] = {"R1", "RB"},
+    ["LStickPush"] = {"L3", "LS"},
+    ["RStickPush"] = {"R3", "RS"},
+}
+print("Controller Enum", json.dump_string(controller_enum))
+
+-- Get the controller type
+local function get_controller_type()
+    if controller_type ~= 0 then
+        return controller_type
+    end
+
+    local manager = sdk.get_managed_singleton("ace.PadManager")
+    local controller = manager:get_MainPad()
+    local type_id = controller:get_DeviceKindDetails()
+    local type = {}
+    for name, id in pairs(controller_types) do
+        if id == type_id then
+            type = {name = name, id = type_id}
+            break
+        end
+    end
+    
+    if string.find(type.name, "Dual") then
+        controller_type = PLAYSTATION
+    elseif string.find(type.name, "Xbox") then
+        controller_type = XBOX
+    else 
+        controller_type = 0
+    end
+    return controller_type
+end
+
+-- Replace controller_enum keys with the first value from to_replace
+for key, values in pairs(to_replace_buttons) do
+    if values[get_controller_type()] ~= nil then
+        controller_enum[values[get_controller_type()]] = controller_enum[key]
+        controller_enum[key] = nil
+    end
+end
+
 
 
 -- Check if the controller is currently in use
@@ -261,11 +323,6 @@ end
 local function get_button_names(code)
     local init_code = code
 
-    local ignore_buttons = {
-        "CANCEL",
-        "DECIDE"
-    }
-
     -- If the code is a single btn
     local btns = {}
     while code > 0 do
@@ -273,7 +330,7 @@ local function get_button_names(code)
             code = 0
         }
 
-        for btn_name, btn_code in pairs(controller_bindings.enum) do
+        for btn_name, btn_code in pairs(controller_enum) do
             if btn_code <= code and btn_code > largest.code then
                 largest = {
                     name = btn_name,
@@ -312,36 +369,23 @@ end
 -- Get current buttons pressed as code
 function controller_bindings.get_current()
     
-    if controller_bindings.manager == nil then
-        controller_bindings.manager = sdk.get_managed_singleton("ace.PadManager")
-        print("Getting pad manager")
-    end
-    if controller_bindings.main == nil then
-        controller_bindings.main = controller_bindings.manager:get_MainPad()
-        print("Getting main pad")
-    end
-
+    local controller = sdk.call_native_func(native_controller, type_controller, "get_MergedDevice")
 
     -- Cache the buttons for the delay - allows for easier setting/reading of binds
     if controller_bindings.current ~= nil and controller_bindings.current_last_check ~= nil and controller_bindings.current_last_check + bindings.delay > os.clock() then
-        print("Returning cached buttons")
         return controller_bindings.current
     end
 
-    print("Getting buttons")
-    local current_code = controller_bindings.main:get_KeyOn()
+    local current_code = controller:get_Button()
 
     if current_code == 0 then
         current_code = -1
     end
-    print("Current code", current_code)
 
     local current = get_button_names(current_code)
-    print("Current buttons", json.dump_string(current))
 
     controller_bindings.current = current
     controller_bindings.current_last_check = os.clock()
-    print("Returning current buttons")
     return current
 end
 
