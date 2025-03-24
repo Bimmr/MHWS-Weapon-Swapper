@@ -122,8 +122,15 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
         
         -- If the player is not in battle, or the player is a cheater
         if not utils.is_in_battle() or I_AM_A_CHEATER then
-            stop_action(managed)
-            managed:changeWeaponFromReserve(true)
+
+            -- Stop any current action, and change the weapon. As long as the current action doesn't have the category of 0
+            local action_manager = managed:get_BaseActionController()
+            local currnet_action_id = action_manager:get_CurrentActionID()
+            if currnet_action_id:get_field("_Category") ~= 0 then
+                stop_action(managed)
+            end
+
+            managed:changeWeaponFromReserve(true) -- Still not sure what the true or false does here....
         end
 
         swap_weapon = false
