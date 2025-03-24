@@ -2,22 +2,11 @@ local version = "0.0.1"
 
 local config = require("WeaponSwapper.Config")
 local bindings = require("WeaponSwapper.Bindings")
+local utils = require("WeaponSwapper.Utils")
 
 local action_id_type = sdk.find_type_definition("ace.ACTION_ID")
 
-local sound_manager = sdk.get_managed_singleton("app.SoundMusicManager")
-local battle_music_manager
-
 local swap_weapon = false
-
--- Check if the player is in battle
-local function is_in_battle()
-    if battle_music_manager == nil then
-        battle_music_manager = sound_manager:get_BattleMusic()
-    end
-    if battle_music_manager == nil then return false end
-    return battle_music_manager:get_IsBattle()
-end
 
 -- Function to stop the current action
 local function stop_action(player)
@@ -29,6 +18,7 @@ end
 
 -- Request to swap weapon
 local function request_swap_weapon()
+    if not utils.getMasterPlayerInfo() then return end
     swap_weapon = true
 end
 
@@ -128,9 +118,10 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
 
     -- If the swap_weapon flag is set, change the weapon
     if swap_weapon then
-
+        local gui_manager = sdk.get_managed_singleton("app.GUIManager")
+        
         -- If the player is not in battle, or the player is a cheater
-        if not is_in_battle() or I_AM_A_CHEATER then
+        if not utils.is_in_battle() or I_AM_A_CHEATER then
             stop_action(managed)
             managed:changeWeaponFromReserve(true)
         end
@@ -138,3 +129,4 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
         swap_weapon = false
     end
 end, function(retval) end)
+
