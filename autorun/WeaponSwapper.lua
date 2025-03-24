@@ -1,4 +1,4 @@
-local version = "0.0.1"
+local version = "0.0.2"
 
 local config = require("WeaponSwapper.Config")
 local bindings = require("WeaponSwapper.Bindings")
@@ -13,11 +13,11 @@ local I_AM_A_CHEATER = false
 local binding_config = config.get("swapkey")
 
 -- Function to stop the current action
-local function stop_action(player)
+local function get_action_id(category, index)
     local action_id = ValueType.new(action_id_type)
-    sdk.set_native_field(action_id, action_id_type, "_Category", 1)
-    sdk.set_native_field(action_id, action_id_type, "_Index", 14)
-    player:changeActionRequest(0, action_id, false)
+    sdk.set_native_field(action_id, action_id_type, "_Category", category)
+    sdk.set_native_field(action_id, action_id_type, "_Index", index) 
+    return action_id
 end
 
 -- Function to check if the player has a facility menu open
@@ -131,6 +131,7 @@ re.on_frame(function()
     bindings.update()
 end)
 
+local skip_movement_end = false
 -- Hook the update function of the HunterCharacter
 -- This will allow us to swap the weapon when the swap_weapon flag is set
 sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), function(args)
@@ -140,17 +141,42 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
 
     -- If the swap_weapon flag is set, change the weapon
     if swap_weapon then
-    
-        -- Stop any current action, and change the weapon. As long as the current action doesn't have the category of 0
+
         local action_manager = managed:get_BaseActionController()
         local currnet_action_id = action_manager:get_CurrentActionID()
         if currnet_action_id:get_field("_Category") ~= 0 then
-            stop_action(managed)
+         
+            -- 14 is ready (Causes issues with weapons not resetting), 
+            -- 15 is currently moving (auto triggers 16, and fixes weapons)
+            -- 16 is stop moving (Moves forward, but fixes weapons)
+            managed:changeActionRequest(0, get_action_id(1, 16), false)
+            skip_movement_end = true
         end
-
-        managed:changeWeaponFromReserve(true) -- Still not sure what the true or false does here....
+        managed:changeWeaponFromReserve(true) -- Still not sure what the true or false does here...
 
         swap_weapon = false
+       
     end
+end, function(retval) end)
+
+-- Hook the execAction function of the cActionController
+-- This will allow us to skip the movement end action, and set a new action
+-- This work around prevents the weapon from not resetting on a switch
+sdk.hook(sdk.find_type_definition("ace.cActionController"):get_method("execAction"), function(args)
+   
+    local managed = sdk.to_managed_object(args[2])
+    local current_action_id = managed:get_CurrentActionID()
+
+    if skip_movement_end then
+        if current_action_id:get_field("_Category") == 1 and current_action_id:get_field("_Index") == 16 then
+            skip_movement_end = false 
+
+            -- We can now set the action to ready
+            utils.getMasterPlayerInfo():get_Character():changeActionRequest(0, get_action_id(1, 14), false)
+            
+            return sdk.PreHookResult.SKIP_ORIGINAL
+        end
+    end
+
 end, function(retval) end)
 
