@@ -255,7 +255,9 @@ local function get_controller_type()
     if controller_type ~= 0 then return controller_type end
 
     local manager = sdk.get_managed_singleton("ace.PadManager")
+    if not manager then return 0 end
     local controller = manager:get_MainPad()
+    if not controller then return 0 end
     local type_id = controller:get_DeviceKindDetails()
     local type = {}
     for name, id in pairs(controller_types) do
