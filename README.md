@@ -1,4 +1,4 @@
-# Weapon Switcher
+# Weapon Swapper
 
 Set up a hotkey to switch your weapon to your reserve weapon on demand.
 
