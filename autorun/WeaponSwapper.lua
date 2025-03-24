@@ -7,6 +7,10 @@ local utils = require("WeaponSwapper.Utils")
 local action_id_type = sdk.find_type_definition("ace.ACTION_ID")
 
 local swap_weapon = false
+local I_AM_A_CHEATER = false
+
+-- Load the binding from the config
+local binding_config = config.get("swapkey")
 
 -- Function to stop the current action
 local function stop_action(player)
@@ -16,23 +20,41 @@ local function stop_action(player)
     player:changeActionRequest(0, action_id, false)
 end
 
+-- Function to check if the player has a facility menu open
+local function has_facility_menu_open()
+    local gui_manager = sdk.get_managed_singleton("app.GUIManager")
+    local facilitymenu_types = utils.generate_enum("app.FacilityMenu.TYPE")
+    
+    local has_facility_menu_open = false
+    for key, value in pairs(facilitymenu_types) do
+        if value > 0 then -- No point in checking INVALID
+            if gui_manager:isActiveMenu(value) then 
+               return true
+            end
+        end
+    end
+    return false
+end
+
 -- Request to swap weapon
 local function request_swap_weapon()
-    if not utils.getMasterPlayerInfo() then return end
+    if not utils.getMasterPlayerInfo() then return end -- Make sure the player info is valid
+    if utils.is_in_battle() and not I_AM_A_CHEATER then return end -- If the player is in battle, and not a cheater
+    if has_facility_menu_open() then return end -- If the player has a facility menu open
+
     swap_weapon = true
 end
 
--- Load the binding from the config
-local binding_config = config.get("swapkey")
 
 -- Load if you're a cheater (Allows weapon swaps inside of a battle)
-local I_AM_A_CHEATER = config.get("I am a Cheater")
+I_AM_A_CHEATER = config.get("I am a Cheater")
 if I_AM_A_CHEATER == nil then config.set("I am a Cheater", false) end
 
 -- Add the binding to the bindings
 if binding_config ~= nil then
     bindings.add(binding_config.device, binding_config.hotkeys, request_swap_weapon)
 end
+
 
 -- On REFramework draw UI
 re.on_draw_ui(function()
@@ -118,20 +140,15 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
 
     -- If the swap_weapon flag is set, change the weapon
     if swap_weapon then
-        local gui_manager = sdk.get_managed_singleton("app.GUIManager")
-        
-        -- If the player is not in battle, or the player is a cheater
-        if not utils.is_in_battle() or I_AM_A_CHEATER then
-
-            -- Stop any current action, and change the weapon. As long as the current action doesn't have the category of 0
-            local action_manager = managed:get_BaseActionController()
-            local currnet_action_id = action_manager:get_CurrentActionID()
-            if currnet_action_id:get_field("_Category") ~= 0 then
-                stop_action(managed)
-            end
-
-            managed:changeWeaponFromReserve(true) -- Still not sure what the true or false does here....
+    
+        -- Stop any current action, and change the weapon. As long as the current action doesn't have the category of 0
+        local action_manager = managed:get_BaseActionController()
+        local currnet_action_id = action_manager:get_CurrentActionID()
+        if currnet_action_id:get_field("_Category") ~= 0 then
+            stop_action(managed)
         end
+
+        managed:changeWeaponFromReserve(true) -- Still not sure what the true or false does here....
 
         swap_weapon = false
     end

@@ -31,4 +31,20 @@ function utils.is_in_battle()
     return battle_music_manager:get_IsBattle()
 end
 
+-- Generate an enum from a type name
+function utils.generate_enum(typename)
+    local t = sdk.find_type_definition(typename)
+    if not t then return {} end
+    local fields = t:get_fields()
+    local enum = {}
+    for i, field in ipairs(fields) do
+        if field:is_static() then
+            local name = field:get_name()
+            local raw_value = field:get_data(nil)
+            enum[name] = raw_value
+        end
+    end
+    return enum
+end
+
 return utils
