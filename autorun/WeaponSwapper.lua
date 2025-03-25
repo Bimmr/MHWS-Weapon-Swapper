@@ -10,7 +10,7 @@ local swap_weapon = false
 local I_AM_A_CHEATER = false
 
 local last_swap_time = 0
-local cooldown = 0.5
+local cooldown = 0.25
 
 -- Load the binding from the config
 local binding_config = config.get("swapkey")
@@ -19,7 +19,7 @@ local binding_config = config.get("swapkey")
 local function get_action_id(category, index)
     local action_id = ValueType.new(action_id_type)
     sdk.set_native_field(action_id, action_id_type, "_Category", category)
-    sdk.set_native_field(action_id, action_id_type, "_Index", index) 
+    sdk.set_native_field(action_id, action_id_type, "_Index", index)
     return action_id
 end
 
@@ -27,12 +27,12 @@ end
 local function has_facility_menu_open()
     local gui_manager = sdk.get_managed_singleton("app.GUIManager")
     local facilitymenu_types = utils.generate_enum("app.FacilityMenu.TYPE")
-    
+
     local has_facility_menu_open = false
     for key, value in pairs(facilitymenu_types) do
         if value > 0 then -- No point in checking INVALID
-            if gui_manager:isActiveMenu(value) then 
-               return true
+            if gui_manager:isActiveMenu(value) then
+                return true
             end
         end
     end
@@ -44,15 +44,16 @@ local function request_swap_weapon()
     if not utils.getMasterCharacter() then return end -- If the player is not in the game
     if utils.is_in_battle() and not I_AM_A_CHEATER then return end -- If the player is in battle, and not a cheater
     if has_facility_menu_open() then return end -- If the player has a facility menu open
-    if os.clock() - last_swap_time < cooldown then print("Stopping cooldown") return  end -- If the player has swapped weapons too quickly
+    if os.clock() - last_swap_time < cooldown then return end -- If the player has swapped weapons too quickly
 
     swap_weapon = true
 end
 
-
 -- Load if you're a cheater (Allows weapon swaps inside of a battle)
 I_AM_A_CHEATER = config.get("I am a Cheater")
-if I_AM_A_CHEATER == nil then config.set("I am a Cheater", false) end
+if I_AM_A_CHEATER == nil then
+    config.set("I am a Cheater", false)
+end
 
 -- Add the binding to the bindings
 if binding_config ~= nil then
@@ -64,17 +65,15 @@ if binding_config ~= nil then
         local hotkeys_codes = {}
         local device = binding_config.device
         for _, hotkey in ipairs(binding_config.hotkeys) do
-           table.insert(hotkeys_codes, bindings.get_code_from_name(device, hotkey))
+            table.insert(hotkeys_codes, bindings.get_code_from_name(device, hotkey))
         end
         binding_config.hotkeys = hotkeys_codes
         config.set("swapkey", binding_config)
     end
     ------------------------------------
 
-
     bindings.add(binding_config.device, binding_config.hotkeys, request_swap_weapon)
 end
-
 
 -- On REFramework draw UI
 re.on_draw_ui(function()
@@ -115,7 +114,7 @@ re.on_draw_ui(function()
                 -- If listening, but no inputs have been started - display listening
                 hotkey_string = "Listening..."
             end
-        -- If not listening, display the hotkeys from the config
+            -- If not listening, display the hotkeys from the config
         elseif binding_config == nil or binding_config.hotkeys == nil then
             hotkey_string = "Not Set"
         else
@@ -141,7 +140,9 @@ re.on_draw_ui(function()
         if imgui.button("Change Hotkey") then
             listen.start()
         end
-        if imgui.is_item_hovered() then imgui.set_tooltip("  ".."Supports both keyboard and controller.".."  ") end
+        if imgui.is_item_hovered() then
+            imgui.set_tooltip("  " .. "Supports both keyboard and controller." .. "  ")
+        end
 
         imgui.spacing()
         imgui.unindent(2)
@@ -166,16 +167,33 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("lateUpdate"
     -- If the swap_weapon flag is set, change the weapon
     if swap_weapon then
 
+        -- Get current action
         local action_manager = managed:get_BaseActionController()
-        local currnet_action_id = action_manager:get_CurrentActionID()
-        
-        if currnet_action_id:get_field("_Category") ~= 0 then
-            managed:changeActionRequest(0, get_action_id(1, 0), false)
-        end
-        managed:changeWeaponFromReserve(true) -- Still not sure what the true or false does here...
+        local current_action_id = action_manager:get_CurrentActionID()
+        local weapon_on_back = current_action_id:get_field("_Category") == 0
 
-        swap_weapon = false
-        last_swap_time = os.clock()
-       
+        local function swap_weapon_action()
+            managed:changeWeaponFromReserve(true) -- Swap the weapon
+            swap_weapon = false
+            last_swap_time = os.clock()
+        end
+
+        if weapon_on_back then
+            print("Swapped weapon on back")
+            swap_weapon_action()
+        else
+            print("Swapped weapon in hand")
+
+            -- End any possible sub-actions (e.g., shooting a bow)
+            managed:get_SubActionController():endActionRequest()
+
+            -- Change the action to pulling out the weapon
+            managed:changeActionRequest(0, get_action_id(1, 0), false)
+
+            swap_weapon_action()
+        end
+
     end
-end, function(retval) end)
+end, function(retval)
+end)
+
