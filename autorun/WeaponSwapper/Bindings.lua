@@ -13,7 +13,9 @@ local XBOX = 2
 
 local function generate_enum(typename)
     local t = sdk.find_type_definition(typename)
-    if not t then return {} end
+    if not t then
+        return {}
+    end
     local fields = t:get_fields()
     local enum = {}
     for i, field in ipairs(fields) do
@@ -51,7 +53,8 @@ function listener.create(id)
     self.listening = false
     self.device = 0
     self.inputs = {}
-    self.complete = function() end
+    self.complete = function()
+    end
 
     setmetatable(self, {
         __index = listener
@@ -108,7 +111,9 @@ function listener.update()
     end
 
     local current = bindings.get_current()
-    if not current then return end
+    if not current then
+        return
+    end
 
     if #current > 0 then
         listener.inputs = current
@@ -191,10 +196,14 @@ function keyboard_bindings.is_triggered(data)
     end
 
     -- If not all current keys match the trigger
-    if matches ~= #data then return false end
+    if matches ~= #data then
+        return false
+    end
 
     -- If no previous keys were found
-    if #keyboard_bindings.previous == 0 then return true end
+    if #keyboard_bindings.previous == 0 then
+        return true
+    end
 
     -- Previous has less matches than the current
     return previous_matches < #data
@@ -210,7 +219,9 @@ function keyboard_bindings.is_down(data)
                 found = true
             end
         end
-        if not found then return false end
+        if not found then
+            return false
+        end
     end
     return true
 end
@@ -235,6 +246,16 @@ function keyboard_bindings.get_names(codes)
         })
     end
     return names
+end
+
+-- Get the code from the name
+function keyboard_bindings.get_code_from_name(name)
+    for key_name, key_code in pairs(keyboard_enum) do
+        if key_name == name then
+            return key_code
+        end
+    end
+    return -1
 end
 
 -- ======= Controller ==========
@@ -274,11 +295,15 @@ local to_replace_buttons = {
 
 -- Get the controller type
 local function get_controller_type()
-    
+
     local manager = sdk.get_managed_singleton("ace.PadManager")
-    if not manager then return 0 end
+    if not manager then
+        return 0
+    end
     local controller = manager:get_MainPad()
-    if not controller then return 0 end
+    if not controller then
+        return 0
+    end
     local type_id = controller:get_DeviceKindDetails()
     local type = {}
     for name, id in pairs(controller_types) do
@@ -311,7 +336,6 @@ function controller_bindings.get_previous()
     return controller_bindings.previous
 end
 
-
 -- Get an array of the buttons in {name, code} format
 local function transform_code_into_codes(code)
     local init_code = code
@@ -333,7 +357,9 @@ local function transform_code_into_codes(code)
         end
 
         -- If we couldn't find a bigger code, then we must have all the possible ones
-        if largest.code == 0 then break end
+        if largest.code == 0 then
+            break
+        end
 
         -- Remove the largest and add it to the list of btns as long as it's not in the ignore list
         code = code - largest.code
@@ -343,7 +369,9 @@ local function transform_code_into_codes(code)
                 ignore = true
             end
         end
-        if not ignore then table.insert(btns, largest) end
+        if not ignore then
+            table.insert(btns, largest)
+        end
     end
     if #btns > 0 then
         return btns
@@ -367,27 +395,29 @@ local function get_codes(btns)
     return codes
 end
 
+local function update_controller_type()
+    -- Ensure controller type gotten actually matters (not 0)
+    controller_type = get_controller_type()
+    if controller_type ~= 0 then
+        print("Controller type: " .. controller_type)
+
+        -- Replace controller_enum keys with the first value from to_replace
+        for key, values in pairs(to_replace_buttons) do
+            if values[controller_type] ~= nil then
+                controller_enum[values[controller_type]] = controller_enum[key]
+                controller_enum[key] = nil
+            end
+        end
+    end
+end
+
 -- Get current buttons pressed as code
 function controller_bindings.get_current()
 
     -- If current controller type hasn't been set, try to get it
     if controller_type == 0 then
-
-        -- Ensure controller type gotten actually matters (not 0)
-        controller_type = get_controller_type()
-        if controller_type ~= 0 then 
-            
-            -- Replace controller_enum keys with the first value from to_replace
-            for key, values in pairs(to_replace_buttons) do
-                if values[controller_type] ~= nil then
-                    controller_enum[values[controller_type]] = controller_enum[key]
-                    controller_enum[key] = nil
-                end
-            end
-        end
+        update_controller_type()
     end
-
-
 
     local controller = sdk.call_native_func(native_controller, type_controller, "get_MergedDevice")
 
@@ -399,7 +429,9 @@ function controller_bindings.get_current()
 
     local current_code = controller:get_Button()
 
-    if current_code == 0 then current_code = -1 end
+    if current_code == 0 then
+        current_code = -1
+    end
 
     local current = transform_code_into_codes(current_code)
     current = get_codes(current)
@@ -431,10 +463,14 @@ function controller_bindings.is_triggered(data)
     end
 
     -- If not all current keys match the trigger
-    if matches ~= #data then return false end
+    if matches ~= #data then
+        return false
+    end
 
     -- If no previous keys were found
-    if #controller_bindings.get_previous() == 0 then return true end
+    if #controller_bindings.get_previous() == 0 then
+        return true
+    end
 
     -- Previous has less matches than the current
     return previous_matches < #data
@@ -442,7 +478,10 @@ end
 
 -- Get the name of the button from the code
 function controller_bindings.get_name(code)
-   for button_name, button_code in pairs(controller_enum) do
+    if controller_type == 0 then
+        update_controller_type()
+    end
+    for button_name, button_code in pairs(controller_enum) do
         if button_code == code then
             return button_name
         end
@@ -452,6 +491,11 @@ end
 
 -- Get an array of the buttons in {name, code} format
 function controller_bindings.get_names(codes)
+
+    if controller_type == 0 then
+        update_controller_type()
+    end
+
     local names = {}
     for _, code in pairs(codes) do
         table.insert(names, {
@@ -460,6 +504,18 @@ function controller_bindings.get_names(codes)
         })
     end
     return names
+end
+
+function controller_bindings.get_code_from_name(name)
+    if controller_type == 0 then
+        update_controller_type()
+    end
+    for button_name, button_code in pairs(controller_enum) do
+        if button_name == name then
+            return button_code
+        end
+    end
+    return -1
 end
 
 -- =========================================
@@ -537,8 +593,12 @@ end
 --- 1 = Controller
 --- 2 = Keyboard
 function bindings.get_current_device()
-    if bindings.is_keyboard() then return KEYBOARD end
-    if bindings.is_controller() then return CONTROLLER end
+    if bindings.is_keyboard() then
+        return KEYBOARD
+    end
+    if bindings.is_controller() then
+        return CONTROLLER
+    end
     return 0
 end
 
@@ -554,45 +614,44 @@ function bindings.get_current()
 end
 
 -- Get the controller type
+--- 0 = Don't care
+--- 1 = Playstation
+--- 2 = Xbox
 function bindings.get_controller_type()
     return controller_type
 end
 
--- Get the name of the key from the code
-function bindings.get_keyboard_name(code)
-    return keyboard_bindings.get_name(code)
-end
-
--- Get the name of the button from the code
-function bindings.get_controller_name(code)
-    return controller_bindings.get_name(code)
-end
-
--- Get the names of the keys from the codes in an array of {name, code}
-function bindings.get_keyboard_names(codes)
-    return keyboard_bindings.get_names(codes)
-end
-
--- Get the names of the buttons from the codes in an array of {name, code}
-function bindings.get_controller_names(codes)
-    return controller_bindings.get_names(codes)
-end
-
 -- Get the name of the key or button from the code in an array of {name, code}
+--- 1 = Controller
+--- 2 = Keyboard
 function bindings.get_name(device, code)
     if device == CONTROLLER then
-        return bindings.get_controller_name(code)
+        return controller_bindings.get_name(code)
     elseif device == KEYBOARD then
-        return bindings.get_keyboard_name(code)
+        return keyboard_bindings.get_name(code)
     end
 end
 
 -- Get the names of the keys or buttons from the codes in an array of {name, code}
+--- 1 = Controller
+--- 2 = Keyboard
 function bindings.get_names(device, codes)
     if device == CONTROLLER then
-        return bindings.get_controller_names(codes)
+        return controller_bindings.get_names(codes)
     elseif device == KEYBOARD then
-        return bindings.get_keyboard_names(codes)
+        return keyboard_bindings.get_names(codes)
+    end
+end
+
+-- Get the code from the name
+--- 1 = Controller
+--- 2 = Keyboard
+-- Returns -1 if not found
+function bindings.get_code_from_name(device, name)
+    if device == CONTROLLER then
+        return controller_bindings.get_code_from_name(name)
+    elseif device == KEYBOARD then
+        return keyboard_bindings.get_code_from_name(name)
     end
 end
 

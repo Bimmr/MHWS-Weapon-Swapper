@@ -52,6 +52,22 @@ if I_AM_A_CHEATER == nil then config.set("I am a Cheater", false) end
 
 -- Add the binding to the bindings
 if binding_config ~= nil then
+
+    ------------------------------------
+    -- check if first element in hotkeys is a number, if it isn't then we need to convert them
+    -- Remove this check in the future
+    if type(binding_config.hotkeys[1]) ~= "number" then
+        local hotkeys_codes = {}
+        local device = binding_config.device
+        for _, hotkey in ipairs(binding_config.hotkeys) do
+           table.insert(hotkeys_codes, bindings.get_code_from_name(device, hotkey))
+        end
+        binding_config.hotkeys = hotkeys_codes
+        config.set("swapkey", binding_config)
+    end
+    ------------------------------------
+
+
     bindings.add(binding_config.device, binding_config.hotkeys, request_swap_weapon)
 end
 
