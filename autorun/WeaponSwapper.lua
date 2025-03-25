@@ -86,8 +86,10 @@ re.on_draw_ui(function()
         if listen.is_listening() then
             -- If listening, and inputs have been started - display the hotkeys being pressed
             if #listen.get_inputs() ~= 0 then
-                for i, input in ipairs(listen.get_inputs()) do
-                    hotkey_string = hotkey_string .. input .. " + "
+                local inputs = listen.get_inputs()
+                inputs = bindings.get_names(listen.get_device(), inputs)
+                for _, input in ipairs(inputs) do
+                    hotkey_string = hotkey_string .. input.name .. " + "
                 end
             else
                 -- If listening, but no inputs have been started - display listening
@@ -97,9 +99,10 @@ re.on_draw_ui(function()
         elseif binding_config == nil or binding_config.hotkeys == nil then
             hotkey_string = "Not Set"
         else
-            for i, input in ipairs(binding_config.hotkeys) do
-                hotkey_string = hotkey_string .. input
-                if i < #binding_config.hotkeys then
+            local inputs = bindings.get_names(binding_config.device, binding_config.hotkeys)
+            for i, input in ipairs(inputs) do
+                hotkey_string = hotkey_string .. input.name
+                if i < #inputs then
                     hotkey_string = hotkey_string .. " + "
                 end
             end
@@ -118,6 +121,7 @@ re.on_draw_ui(function()
         if imgui.button("Change Hotkey") then
             listen.start()
         end
+        if imgui.is_item_hovered() then imgui.set_tooltip("  ".."Supports both keyboard and controller.".."  ") end
 
         imgui.spacing()
         imgui.unindent(2)

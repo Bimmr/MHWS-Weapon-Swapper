@@ -144,7 +144,7 @@ function keyboard_bindings.get_previous()
     return keyboard_bindings.previous
 end
 
--- Get the current keys in an array with the names
+-- Get the current keys in an array with the codes
 --- Will return the current_table table if not enough time has passed since the last check
 function keyboard_bindings.get_current()
 
@@ -159,7 +159,7 @@ function keyboard_bindings.get_current()
     local current = {}
     for key_name, key_code in pairs(keyboard_enum) do
         if keyboard:isDown(key_code) then
-            table.insert(current, key_name)
+            table.insert(current, key_code)
         end
     end
 
@@ -177,14 +177,14 @@ function keyboard_bindings.is_triggered(data)
     -- Check if in current all keys are pressed, and in previous either none or all but one
     local matches = 0
     local previous_matches = 0
-    for _, name in pairs(data) do
-        for _, current_name in pairs(current) do
-            if current_name == name then
+    for _, code in pairs(data) do
+        for _, current_code in pairs(current) do
+            if current_code == code then
                 matches = matches + 1
             end
         end
-        for _, previous_name in pairs(previous) do
-            if previous_name == name then
+        for _, previous_code in pairs(previous) do
+            if previous_code == code then
                 previous_matches = previous_matches + 1
             end
         end
@@ -203,16 +203,38 @@ end
 -- Return true or false depending on if the items in the passed table are currently pressed
 function keyboard_bindings.is_down(data)
     local current = bindings.get_current()
-    for _, name in pairs(data) do
+    for _, code in pairs(data) do
         local found = false
-        for _, current_name in pairs(current) do
-            if current_name == name then
+        for _, current_code in pairs(current) do
+            if current_code == code then
                 found = true
             end
         end
         if not found then return false end
     end
     return true
+end
+
+-- Get the name of the key from the code
+function keyboard_bindings.get_name(code)
+    for key_name, key_code in pairs(keyboard_enum) do
+        if key_code == code then
+            return key_name
+        end
+    end
+    return "Unknown"
+end
+
+-- Get an array of the keys in {name, code} format
+function keyboard_bindings.get_names(codes)
+    local names = {}
+    for _, code in pairs(codes) do
+        table.insert(names, {
+            name = keyboard_bindings.get_name(code),
+            code = code
+        })
+    end
+    return names
 end
 
 -- ======= Controller ==========
@@ -252,8 +274,7 @@ local to_replace_buttons = {
 
 -- Get the controller type
 local function get_controller_type()
-    if controller_type ~= 0 then return controller_type end
-
+    
     local manager = sdk.get_managed_singleton("ace.PadManager")
     if not manager then return 0 end
     local controller = manager:get_MainPad()
@@ -280,14 +301,6 @@ local function get_controller_type()
     return controller_type
 end
 
--- Replace controller_enum keys with the first value from to_replace
-for key, values in pairs(to_replace_buttons) do
-    if values[get_controller_type()] ~= nil then
-        controller_enum[values[get_controller_type()]] = controller_enum[key]
-        controller_enum[key] = nil
-    end
-end
-
 -- Check if the controller is currently in use
 function controller_bindings.is_currently_in_use()
     return #controller_bindings.get_current() > 0
@@ -298,8 +311,9 @@ function controller_bindings.get_previous()
     return controller_bindings.previous
 end
 
--- This function will return an array of {name, code} for each button
-local function get_button_names(code)
+
+-- Get an array of the buttons in {name, code} format
+local function transform_code_into_codes(code)
     local init_code = code
 
     -- If the code is a single btn
@@ -329,20 +343,51 @@ local function get_button_names(code)
                 ignore = true
             end
         end
-        if not ignore then table.insert(btns, largest.name) end
+        if not ignore then table.insert(btns, largest) end
     end
     if #btns > 0 then
         return btns
     elseif code ~= 0 and code ~= -1 then
-        table.insert(btns, "Unknown")
+        table.insert(btns, {
+            name = "Unknown",
+            code = init_code
+        })
         return btns
     else
         return btns
     end
 end
 
+-- Get the passed array of buttons in {name, code} format and return just a list of codes
+local function get_codes(btns)
+    local codes = {}
+    for _, btn in pairs(btns) do
+        table.insert(codes, btn.code)
+    end
+    return codes
+end
+
 -- Get current buttons pressed as code
 function controller_bindings.get_current()
+
+    -- If current controller type hasn't been set, try to get it
+    if controller_type == 0 then
+
+        -- Ensure controller type gotten actually matters (not 0)
+        controller_type = get_controller_type()
+        if controller_type ~= 0 then 
+            
+            -- Replace controller_enum keys with the first value from to_replace
+            for key, values in pairs(to_replace_buttons) do
+                if values[controller_type] ~= nil then
+                    controller_enum[values[controller_type]] = controller_enum[key]
+                    controller_enum[key] = nil
+                end
+            end
+        end
+    end
+
+
 
     local controller = sdk.call_native_func(native_controller, type_controller, "get_MergedDevice")
 
@@ -356,7 +401,8 @@ function controller_bindings.get_current()
 
     if current_code == 0 then current_code = -1 end
 
-    local current = get_button_names(current_code)
+    local current = transform_code_into_codes(current_code)
+    current = get_codes(current)
 
     controller_bindings.current = current
     controller_bindings.current_last_check = os.clock()
@@ -371,14 +417,14 @@ function controller_bindings.is_triggered(data)
     -- Check if in current all keys are pressed, and in previous either none or all but one
     local matches = 0
     local previous_matches = 0
-    for _, name in pairs(data) do
-        for _, current_name in pairs(current) do
-            if current_name == name then
+    for _, code in pairs(data) do
+        for _, current_code in pairs(current) do
+            if current_code == code then
                 matches = matches + 1
             end
         end
-        for _, previous_name in pairs(previous) do
-            if previous_name == name then
+        for _, previous_code in pairs(previous) do
+            if previous_code == code then
                 previous_matches = previous_matches + 1
             end
         end
@@ -392,6 +438,28 @@ function controller_bindings.is_triggered(data)
 
     -- Previous has less matches than the current
     return previous_matches < #data
+end
+
+-- Get the name of the button from the code
+function controller_bindings.get_name(code)
+   for button_name, button_code in pairs(controller_enum) do
+        if button_code == code then
+            return button_name
+        end
+    end
+    return "Unknown"
+end
+
+-- Get an array of the buttons in {name, code} format
+function controller_bindings.get_names(codes)
+    local names = {}
+    for _, code in pairs(codes) do
+        table.insert(names, {
+            name = controller_bindings.get_name(code),
+            code = code
+        })
+    end
+    return names
 end
 
 -- =========================================
@@ -483,6 +551,49 @@ function bindings.get_current()
         return controller_bindings.get_current()
     end
     return {}
+end
+
+-- Get the controller type
+function bindings.get_controller_type()
+    return controller_type
+end
+
+-- Get the name of the key from the code
+function bindings.get_keyboard_name(code)
+    return keyboard_bindings.get_name(code)
+end
+
+-- Get the name of the button from the code
+function bindings.get_controller_name(code)
+    return controller_bindings.get_name(code)
+end
+
+-- Get the names of the keys from the codes in an array of {name, code}
+function bindings.get_keyboard_names(codes)
+    return keyboard_bindings.get_names(codes)
+end
+
+-- Get the names of the buttons from the codes in an array of {name, code}
+function bindings.get_controller_names(codes)
+    return controller_bindings.get_names(codes)
+end
+
+-- Get the name of the key or button from the code in an array of {name, code}
+function bindings.get_name(device, code)
+    if device == CONTROLLER then
+        return bindings.get_controller_name(code)
+    elseif device == KEYBOARD then
+        return bindings.get_keyboard_name(code)
+    end
+end
+
+-- Get the names of the keys or buttons from the codes in an array of {name, code}
+function bindings.get_names(device, codes)
+    if device == CONTROLLER then
+        return bindings.get_controller_names(codes)
+    elseif device == KEYBOARD then
+        return bindings.get_keyboard_names(codes)
+    end
 end
 
 -- Get the callback for the keyboard input
