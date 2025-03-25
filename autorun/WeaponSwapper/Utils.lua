@@ -17,6 +17,7 @@ end
 -- Get the Master Chacter from the player info
 function utils.getMasterCharacter()
     local player = utils.getMasterPlayerInfo()
+    if not player then return nil end
     player = player:get_Character()
     return player
 end
