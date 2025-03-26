@@ -10,7 +10,7 @@ local swap_weapon = false
 local I_AM_A_CHEATER = false
 
 local last_swap_time = 0
-local cooldown = 0.25
+local cooldown = 0.5
 
 -- Load the binding from the config
 local binding_config = config.get("swapkey")
@@ -42,11 +42,13 @@ end
 -- Request to swap weapon
 local function request_swap_weapon()
     if not utils.getMasterCharacter() then return end -- If the player is not in the game
+    if not utils.getMasterCharacter():get_WeaponHandling() then return end -- If the player does not have a weapon handling
     if utils.is_in_battle() and not I_AM_A_CHEATER then return end -- If the player is in battle, and not a cheater
     if has_facility_menu_open() then return end -- If the player has a facility menu open
+    if utils.getMasterCharacter():get_IsInAllTent() then return end -- If the player is in any tent
     if os.clock() - last_swap_time < cooldown then return end -- If the player has swapped weapons too quickly
 
-    swap_weapon = true
+    swap_weapon = not swap_weapon
 end
 
 -- Load if you're a cheater (Allows weapon swaps inside of a battle)
@@ -156,44 +158,77 @@ re.on_frame(function()
     bindings.update()
 end)
 
-local skip_movement_end = false
--- Hook the update function of the HunterCharacter
--- This will allow us to swap the weapon when the swap_weapon flag is set
-sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("lateUpdate"), function(args)
-    local managed = sdk.to_managed_object(args[2])
-    if not managed:get_type_definition():is_a("app.HunterCharacter") then return end
-    if not managed:get_IsMaster() then return end
+
+-- Variables to keep track of weapon_swap steps
+local forced_onto_back = false
+local last_actions = {}
+
+-- Update Hook to swap the weapon
+sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), function(args)
+   
+    local hunter = sdk.to_managed_object(args[2])
+    if not hunter:get_type_definition():is_a("app.HunterCharacter") then return end
+    if not hunter:get_IsMaster() then return end
+    if hunter:get_BaseActionController():get_CurrentAction() == nil then return end
+    
+    -- Add the last 5 actions to the last_actions table
+    if #last_actions > 5 then
+        table.remove(last_actions, 1)
+    end
+    table.insert(last_actions, {
+        cat = hunter:get_BaseActionController():get_CurrentActionID():get_field("_Category"), 
+        type = hunter:get_BaseActionController():get_CurrentAction():get_field("_WeaponType")
+    })
 
     -- If the swap_weapon flag is set, change the weapon
     if swap_weapon then
 
-        -- Get current action
-        local action_manager = managed:get_BaseActionController()
-        local current_action_id = action_manager:get_CurrentActionID()
-        local weapon_on_back = current_action_id:get_field("_Category") == 0
+        -- Check previous action logs to check the weapon (Current action doesn't seem to be constantly updated)
+        for _, action in ipairs(last_actions) do
+            if action.cat ~= 0 then -- Check if the weapon is doing something
 
-        local function swap_weapon_action()
-            managed:changeWeaponFromReserve(true) -- Swap the weapon
+                -- Force the weapon onto the back
+                hunter:get_SubActionController():endActionRequest()
+                hunter:changeActionRequest(0, get_action_id(0, 1), false)
+                
+                forced_onto_back = true
+                return sdk.PreHookResult.CALL_ORIGINAL 
+            end
+        end
+
+        -- Check if the weapon is not out (On back)
+        if not hunter:checkWeaponOn() then
+            
+            -- Swap the weapons
+            hunter:changeWeaponFromReserve(true) -- Swap the weapon, not sure what true/false does here
+            
             swap_weapon = false
             last_swap_time = os.clock()
         end
-
-        if weapon_on_back then
-            print("Swapped weapon on back")
-            swap_weapon_action()
-        else
-            print("Swapped weapon in hand")
-
-            -- End any possible sub-actions (e.g., shooting a bow)
-            managed:get_SubActionController():endActionRequest()
-
-            -- Change the action to pulling out the weapon
-            managed:changeActionRequest(0, get_action_id(1, 0), false)
-
-            swap_weapon_action()
-        end
-
     end
 end, function(retval)
 end)
 
+-- After the update hook, check if the weapon was swapped
+sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("lateUpdate"), function(args)
+    local hunter = sdk.to_managed_object(args[2])
+    if not hunter:get_type_definition():is_a("app.HunterCharacter") then return end
+    if not hunter:get_IsMaster() then return end
+    
+
+    -- Weapon was put onto back and then swapped
+    if forced_onto_back and not swap_weapon then
+        forced_onto_back = false
+        
+        -- Pull the weapon back out
+        hunter:changeActionRequest(0, get_action_id(1, 0), false)
+        
+        local weapon_type = hunter:get_WeaponType()
+
+        -- Initialize the kinsect if the weapon is the Insect Glaive
+        if weapon_type == 10 then
+            hunter:get_Wp10Insect():doStart()
+        end
+    end
+end, function(retval)
+end)
