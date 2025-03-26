@@ -1,4 +1,4 @@
-local version = "0.0.2"
+local version = "0.0.3"
 
 local config = require("WeaponSwapper.Config")
 local bindings = require("WeaponSwapper.Bindings")
@@ -190,7 +190,7 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
                 -- Force the weapon onto the back
                 hunter:get_SubActionController():endActionRequest()
                 hunter:changeActionRequest(0, get_action_id(0, 1), false)
-                
+
                 forced_onto_back = true
                 return sdk.PreHookResult.CALL_ORIGINAL 
             end
