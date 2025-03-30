@@ -22,7 +22,8 @@ local current_weapon
 
 local cooldown = 0.5
 local last_swap_time = 0
-local last_swap_control_time = 0
+
+local swap_state_control_time = 0
 
 -- Variables for tracking the last actions performed by the player
 local last_actions = {}
@@ -85,45 +86,6 @@ if binding_config then
 
     -- Add the binding
     bindings.add(binding_config.device, binding_config.hotkeys, request_swap_weapon)
-end
-
------------------------------------- Action Tracking ------------------------------------
--- This function is used to keep track of the last 5 actions performed by the player
--- Only every 3rd action seems to be valid so we track the last 5
--- @param action_id: The action ID of the action being performed
-local function update_last_actions(action_id)
-    last_action_index = (last_action_index % max_actions) + 1
-    last_actions[last_action_index] = {
-        category = action_id:get_field("_Category"),
-        index = action_id:get_field("_Index"),
-        type = action_id:get_field("_WeaponType")
-    }
-end
-
--- Check if the given action is being performed within the last 5 tracked action updates
--- @param category: The category of the action to check, if nil, ignore this check
--- @param index: The index of the action to check if nil, ignore this check
--- @return: true if the action is being performed, false otherwise
-local function is_action_current(category, index)
-    for i = 1, max_actions do
-        local action = last_actions[i]
-        if action and (category == nil or action.category == category) and (index == nil or action.index == index) then
-            return true
-        end
-    end
-    return false
-end
-
--- Check if the weapon is doing something (category is not 0)
--- @return: true if the weapon is doing something, false otherwise
-local function is_action_weapon_doing_something()
-    for i = 1, max_actions do
-        local action = last_actions[i]
-        if action and action.category ~= 0 then
-            return true
-        end
-    end
-    return false
 end
 
 ------------------------------------ REFramework ------------------------------------
@@ -220,22 +182,19 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
     local base_action_controller = hunter:get_BaseActionController()
     if not base_action_controller or base_action_controller:get_CurrentAction() == nil then return end
 
-    -- Update the last actions performed by the player
-    update_last_actions(base_action_controller:get_CurrentActionID())
-
     -- If weapon was just swapped and forced onto back, pull it back out
-    if not swap_weapon and forced_onto_back and os.clock() - last_swap_control_time > 0.05 then
+    if not swap_weapon and forced_onto_back and os.clock() - swap_state_control_time > 0.05 then
         hunter:changeActionRequest(0, get_action_id(1, 0), false)
 
         -- Wait until the weapon is pulled back out
-        if is_action_current(1, 0) then
+        if hunter:checkWeaponOn() then
             forced_onto_back = false
             prepare_weapon = true
         end
     end
 
     -- If the weapon needs to be prepared
-    if prepare_weapon and os.clock() - last_swap_control_time > 0.1 then
+    if prepare_weapon and os.clock() - swap_state_control_time > 0.1 then
         prepare_weapon = false
 
         local weapon_type = hunter:get_WeaponType()
@@ -259,10 +218,10 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
             hunter:changeActionRequest(0, get_action_id(0, 1), false)
 
             forced_onto_back = true
-            last_swap_control_time = os.clock()
+            swap_state_control_time = os.clock()
             return sdk.PreHookResult.CALL_ORIGINAL
 
-        elseif not is_weapon_in_hand and os.clock() - last_swap_control_time > 0.01 then
+        elseif not is_weapon_in_hand and os.clock() - swap_state_control_time > 0.01 then
             
             -- Make sure the weapon swaps
             if not current_weapon then
@@ -277,7 +236,7 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
                 current_weapon = nil
                 swap_weapon = false
                 last_swap_time = os.clock()
-                last_swap_control_time = os.clock()
+                swap_state_control_time = os.clock()
 
                 -- If the weapon wasn't forced on the back, prepare the weapon right away
                 if not forced_onto_back then
