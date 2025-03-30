@@ -159,10 +159,55 @@ re.on_frame(function()
 end)
 
 
--- Variables to keep track of weapon_swap steps
-local forced_onto_back = false
 local last_actions = {}
 
+-- This function is used to keep track of the last 5 actions performed by the player
+-- Only every 3rd action seems to be valid so we track the last 5
+local function update_last_actions(action_id)
+    if #last_actions > 4 then
+        table.remove(last_actions, 1)
+    end
+    local data = {
+        category = action_id:get_field("_Category"), 
+        index = action_id:get_field("_Index"), 
+        type = action_id:get_field("_WeaponType")
+    }
+    table.insert(last_actions, data)
+end
+
+-- Check if the given action is being performed within the last 5 tracked action updates
+-- @param category: The category of the action to check, if nil, ignore this check
+-- @param index: The index of the action to check if nil, ignore this check
+-- @return: true if the action is being performed, false otherwise
+local function is_action_current(category, index)
+    local action_found = false
+    for _, action in ipairs(last_actions) do
+        if (category == nil or action.category == category) and (index == nil or action.index == index) then
+            action_found = true
+        end
+    end
+    return action_found
+end
+
+-- Check if the weapon is doing something (category is not 0)
+-- @return: true if the weapon is doing something, false otherwise
+local function is_action_weapon_doing_something()
+    local action_found = false
+    for _, action in ipairs(last_actions) do
+        if action.category ~= 0 then
+            action_found = true
+        end
+    end
+    return action_found
+
+end
+    
+
+-- Variables to keep track of weapon_swap
+local forced_onto_back = false
+local last_swap_control_time = 0
+local prepare_weapon = false
+local current_weapon = nil
 -- Update Hook to swap the weapon
 sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), function(args)
    
@@ -171,58 +216,23 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
     if not hunter:get_IsMaster() then return end
     if hunter:get_BaseActionController():get_CurrentAction() == nil then return end
     
-    -- Add the last 5 actions to the last_actions table
-    if #last_actions > 5 then
-        table.remove(last_actions, 1)
-    end
-    table.insert(last_actions, {
-        cat = hunter:get_BaseActionController():get_CurrentActionID():get_field("_Category"), 
-        type = hunter:get_BaseActionController():get_CurrentAction():get_field("_WeaponType")
-    })
+    update_last_actions(hunter:get_BaseActionController():get_CurrentActionID())
 
-    -- If the swap_weapon flag is set, change the weapon
-    if swap_weapon then
-
-        -- Check previous action logs to check the weapon (Current action doesn't seem to be constantly updated)
-        for _, action in ipairs(last_actions) do
-            if action.cat ~= 0 then -- Check if the weapon is doing something
-
-                -- Force the weapon onto the back
-                hunter:get_SubActionController():endActionRequest()
-                hunter:changeActionRequest(0, get_action_id(0, 1), false)
-
-                forced_onto_back = true
-                return sdk.PreHookResult.CALL_ORIGINAL 
-            end
-        end
-
-        -- Check if the weapon is not out (On back)
-        if not hunter:checkWeaponOn() then
-            
-            -- Swap the weapons
-            hunter:changeWeaponFromReserve(true) -- Swap the weapon, not sure what true/false does here
-            
-            swap_weapon = false
-            last_swap_time = os.clock()
-        end
-    end
-end, function(retval)
-end)
-
--- After the update hook, check if the weapon was swapped
-sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("lateUpdate"), function(args)
-    local hunter = sdk.to_managed_object(args[2])
-    if not hunter:get_type_definition():is_a("app.HunterCharacter") then return end
-    if not hunter:get_IsMaster() then return end
-    
-
-    -- Weapon was put onto back and then swapped
-    if forced_onto_back and not swap_weapon then
-        forced_onto_back = false
-        
-        -- Pull the weapon back out
+    -- If weapon was just swapped and forced onto back, pull it back out
+    if not swap_weapon and forced_onto_back and os.clock() - last_swap_control_time > 0.05 then
         hunter:changeActionRequest(0, get_action_id(1, 0), false)
-        
+
+        -- Wait until the weapon is pulled back out
+        if is_action_current(1, 0) then
+            forced_onto_back = false
+            prepare_weapon = true
+        end
+    end
+
+    -- If the weapon needs to be prepared
+    if prepare_weapon and os.clock() - last_swap_control_time > 0.1 then
+        prepare_weapon = false
+
         local weapon_type = hunter:get_WeaponType()
 
         -- Initialize the kinsect if the weapon is the Insect Glaive
@@ -230,5 +240,52 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("lateUpdate"
             hunter:get_Wp10Insect():doStart()
         end
     end
+
+
+    -- If the swap_weapon flag is set, change the weapon
+    if swap_weapon then
+
+        -- Check previous action logs to check the weapon (Current action doesn't seem to be constantly updated)
+        local is_weapon_in_hand = hunter:checkWeaponOn() -- Check if the weapon is doing something (category is not 0)
+        if is_weapon_in_hand then
+
+            -- Force the weapon onto the back
+            hunter:get_SubActionController():endActionRequest()
+            hunter:changeActionRequest(0, get_action_id(0, 1), false)
+
+            forced_onto_back = true
+            last_swap_control_time = os.clock()
+            return sdk.PreHookResult.CALL_ORIGINAL
+        
+
+        -- Check if the weapon is not out (On back)
+        elseif not is_weapon_in_hand and os.clock() - last_swap_control_time > 0.01 then
+            
+            -- Make sure the weapon swaps
+            if current_weapon == nil then
+                current_weapon = hunter:get_Weapon()
+            end
+
+            -- Swap the weapons
+            hunter:changeWeaponFromReserve(true) -- Swap the weapon, not sure what true/false does here
+
+            -- If the weapon is now different
+            if hunter:get_Weapon() ~= current_weapon then
+                current_weapon = nil
+            
+                
+                swap_weapon = false
+                last_swap_time = os.clock()
+                last_swap_control_time = os.clock()
+
+                -- If the weapon wasn't forced on the back, prepare the weapon right away
+                if not forced_onto_back then
+                    prepare_weapon = true
+                end
+            end
+
+        end
+    end
+    
 end, function(retval)
 end)
