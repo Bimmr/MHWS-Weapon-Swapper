@@ -70,7 +70,7 @@ local function request_swap_weapon()
 end
 
 --------------------------------------- Config ------------------------------------
-I_AM_A_CHEATER = config.get("I am a Cheater") or false
+I_AM_A_CHEATER = config.get("I am a Cheater") or I_AM_A_CHEATER -- Either get it from the config or from the default value
 config.set("I am a Cheater", I_AM_A_CHEATER)
 
 local binding_config = config.get("swapkey")
