@@ -23,12 +23,12 @@ local current_weapon
 local cooldown = 0.5
 local last_swap_time = 0
 
+local weapon_away_delay = 0.01 -- Putting weapon on back delay
+local weapon_out_delay = 0.05 -- Pulling weapon out delay
+local weapon_prepare_cooldown = 0.01 -- Weapon prepare cooldown
 local swap_state_control_time = 0
 
--- Variables for tracking the last actions performed by the player
-local last_actions = {}
-local last_action_index = 0
-local max_actions = 5
+local I_AM_A_CHEATER = false
 
 --------------------------------------- Utilities ------------------------------------
 
@@ -70,7 +70,7 @@ local function request_swap_weapon()
 end
 
 --------------------------------------- Config ------------------------------------
-local I_AM_A_CHEATER = config.get("I am a Cheater") or false
+I_AM_A_CHEATER = config.get("I am a Cheater") or false
 config.set("I am a Cheater", I_AM_A_CHEATER)
 
 local binding_config = config.get("swapkey")
@@ -183,7 +183,7 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
     if not base_action_controller or base_action_controller:get_CurrentAction() == nil then return end
 
     -- If weapon was just swapped and forced onto back, pull it back out
-    if not swap_weapon and forced_onto_back and os.clock() - swap_state_control_time > 0.05 then
+    if not swap_weapon and forced_onto_back and os.clock() - swap_state_control_time > weapon_out_delay then
         hunter:changeActionRequest(0, get_action_id(1, 0), false)
 
         -- Wait until the weapon is pulled back out
@@ -194,7 +194,7 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
     end
 
     -- If the weapon needs to be prepared
-    if prepare_weapon and os.clock() - swap_state_control_time > 0.1 then
+    if prepare_weapon and os.clock() - swap_state_control_time > weapon_prepare_cooldown then
         prepare_weapon = false
 
         local weapon_type = hunter:get_WeaponType()
@@ -221,7 +221,7 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
             swap_state_control_time = os.clock()
             return sdk.PreHookResult.CALL_ORIGINAL
 
-        elseif not is_weapon_in_hand and os.clock() - swap_state_control_time > 0.01 then
+        elseif not is_weapon_in_hand and os.clock() - swap_state_control_time > weapon_away_delay then
             
             -- Make sure the weapon swaps
             if not current_weapon then
@@ -229,7 +229,7 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
             end
 
             -- Swap the weapons
-            hunter:changeWeaponFromReserve(true)
+            hunter:changeWeaponFromReserve(false) -- True = don't show other players the weapon swap, false = show other players the weapon swap
 
             -- If the weapon is now different
             if hunter:get_Weapon() ~= current_weapon then
