@@ -1,4 +1,4 @@
-local version = "0.0.4"
+local version = "0.0.5"
 
 -- Cached values
 local sdk = sdk

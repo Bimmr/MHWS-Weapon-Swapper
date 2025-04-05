@@ -33,6 +33,8 @@ function utils.is_in_battle()
 end
 
 -- Generate an enum from a type name
+-- @param typename: The name of the type to generate the enum from
+-- @return: A table containing the enum values
 function utils.generate_enum(typename)
     local t = sdk.find_type_definition(typename)
     if not t then return {} end
@@ -46,6 +48,18 @@ function utils.generate_enum(typename)
         end
     end
     return enum
+end
+
+-- Applies a function to each element in a table and returns a new table with the results
+-- @param tbl: The input table
+-- @param func: The function to apply to each element
+-- @return: A new table with the transformed elements
+function utils.map(tbl, func)
+    local result = {}
+    for i, v in ipairs(tbl) do
+        result[i] = func(v)
+    end
+    return result
 end
 
 return utils
