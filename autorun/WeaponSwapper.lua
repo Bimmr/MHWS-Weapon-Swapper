@@ -1,4 +1,4 @@
-local version = "0.0.5"
+local version = "0.0.6"
 
 -- Cached values
 local sdk = sdk
@@ -28,7 +28,8 @@ local weapon_out_delay = 0.05 -- Pulling weapon out delay
 local weapon_prepare_cooldown = 0.01 -- Weapon prepare cooldown
 local swap_state_control_time = 0
 
-local I_AM_A_CHEATER = false
+local ALLOW_IN_COMBAT = false
+local SKIP_WEAPON_READY_ANIMATION = false
 
 --------------------------------------- Utilities ------------------------------------
 
@@ -61,7 +62,7 @@ end
 local function request_swap_weapon()
     if not utils.getMasterCharacter() then return end -- Player is not in the game
     if not utils.getMasterCharacter():get_WeaponHandling() then return end -- No weapon handling available
-    if utils.is_in_battle() and not I_AM_A_CHEATER then return end -- In battle and not a cheater
+    if utils.is_in_battle() and not ALLOW_IN_COMBAT then return end -- In battle and not a cheater
     if has_facility_menu_open() then return end -- Facility menu is open
     if utils.getMasterCharacter():get_IsInAllTent() then return end -- Player is in a tent
     if os.clock() - last_swap_time < cooldown then return end -- Cooldown not yet elapsed
@@ -70,8 +71,16 @@ local function request_swap_weapon()
 end
 
 --------------------------------------- Config ------------------------------------
-I_AM_A_CHEATER = config.get("I am a Cheater") or I_AM_A_CHEATER -- Either get it from the config or from the default value
-config.set("I am a Cheater", I_AM_A_CHEATER)
+if config.get("I am a Cheater") ~= nil then
+    ALLOW_IN_COMBAT = config.get("I am a Cheater") -- Get the value from the config
+    config.set("I am a Cheater", nil) -- Remove the old config value if it exists
+end
+
+ALLOW_IN_COMBAT = config.get("Allow in combat") or ALLOW_IN_COMBAT -- Either get it from the config or from the default value
+config.set("Allow in combat", ALLOW_IN_COMBAT)
+
+SKIP_WEAPON_READY_ANIMATION = config.get("Skip weapon ready animation") or SKIP_WEAPON_READY_ANIMATION -- Either get it from the config or from the default value
+config.set("Skip weapon ready animation", SKIP_WEAPON_READY_ANIMATION)
 
 local binding_config = config.get("swapkey")
 if binding_config then
@@ -184,7 +193,12 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
 
     -- If weapon was just swapped and forced onto back, pull it back out
     if not swap_weapon and forced_onto_back and os.clock() - swap_state_control_time > weapon_out_delay then
-        hunter:changeActionRequest(0, get_action_id(1, 0), false)
+
+        if SKIP_WEAPON_READY_ANIMATION then
+            hunter:changeActionRequest(0, get_action_id(1, 0), false) -- Pull the weapon out
+        else
+            hunter:changeActionRequest(0, get_action_id(1, 14), false) -- Idle stance with weapon out
+        end
 
         -- Wait until the weapon is pulled back out
         if hunter:checkWeaponOn() then
