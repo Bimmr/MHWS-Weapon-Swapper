@@ -194,7 +194,7 @@ sdk.hook(sdk.find_type_definition("app.HunterCharacter"):get_method("update"), f
     -- If weapon was just swapped and forced onto back, pull it back out
     if not swap_weapon and forced_onto_back and os.clock() - swap_state_control_time > weapon_out_delay then
 
-        if SKIP_WEAPON_READY_ANIMATION then
+        if not SKIP_WEAPON_READY_ANIMATION then
             hunter:changeActionRequest(0, get_action_id(1, 0), false) -- Pull the weapon out
         else
             hunter:changeActionRequest(0, get_action_id(1, 14), false) -- Idle stance with weapon out
