@@ -20,7 +20,7 @@ local forced_onto_back = false
 local prepare_weapon = false
 local current_weapon
 
-local cooldown = 0.5
+local cooldown = 0.5 -- Weapon swap cooldown time
 local last_swap_time = 0
 
 local weapon_away_delay = 0.01 -- Putting weapon on back delay
