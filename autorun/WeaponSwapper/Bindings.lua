@@ -46,14 +46,14 @@ end
 local listeners = {}
 
 -- ========== Example usage ============
--- local listen = bindings.listener.create("hotkey")
+-- local listener = bindings.listener:create("hotkey")
 
--- listen:on_complete(function()
+-- listener:on_complete(function()
 --     print("Complete")
 -- end)
 
 -- if imgui.button("Listen") then
---     listen.start()
+--     listener:start()
 -- end
 
 local listener = {}
