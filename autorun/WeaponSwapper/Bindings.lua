@@ -188,8 +188,6 @@ function listener:update()
         if bindings.get_current_device() ~= DEVICE_TYPES.NONE then
             self.device = bindings.get_current_device()
         end
-        
-        print("Device: " .. self.device)
 
     elseif #current == 0 and self.inputs and #self.inputs > 0 then
         self.listening = false
