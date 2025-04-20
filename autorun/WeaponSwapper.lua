@@ -103,10 +103,10 @@ end
 re.on_draw_ui(function()
     if imgui.collapsing_header("Weapon Swapper") then
         -- Create the binding listener
-        local listen = bindings.listener.create("weaponswapper")
+        local listen = bindings.listener:create("weaponswapper")
 
         -- On listener complete set the new hotkeys
-        listen.on_complete(function()
+        listen:on_complete(function()
             -- Remove the old binding
             if binding_config ~= nil then
                 bindings.remove(binding_config.device, binding_config.hotkeys)
@@ -114,8 +114,8 @@ re.on_draw_ui(function()
 
             -- Set the new binding
             binding_config = {
-                hotkeys = listen.get_inputs(),
-                device = listen.get_device()
+                hotkeys = listen:get_inputs(),
+                device = listen:get_device()
             }
 
             -- Add the new binding, and save it to the config
@@ -126,17 +126,17 @@ re.on_draw_ui(function()
         -- Create the hotkey string
         local hotkey_string = ""
 
-        if listen.is_listening() then
+        if listen:is_listening() then
             -- If listening, and inputs have been started - display the hotkeys being pressed
-            if #listen.get_inputs() ~= 0 then
-                local inputs = listen.get_inputs()
-                inputs = bindings.get_names(listen.get_device(), inputs)
+            if #listen:get_inputs() ~= 0 then
+                local inputs = listen:get_inputs()
+                inputs = bindings.get_names(listen:get_device(), inputs)
                 for _, input in ipairs(inputs) do
                     hotkey_string = hotkey_string .. input.name .. " + "
                 end
             else
                 -- If listening, but no inputs have been started - display listening
-                hotkey_string = "Listening..."
+                hotkey_string = "Listening "..listen:get_timeout_remaining().." ... "
             end
             -- If not listening, display the hotkeys from the config
         elseif binding_config == nil or binding_config.hotkeys == nil then
@@ -162,7 +162,7 @@ re.on_draw_ui(function()
 
         -- When the change hotkey button is pressed, start listening for a new hotkey
         if imgui.button("Change Hotkey") then
-            listen.start()
+            listen:start()
         end
         if imgui.is_item_hovered() then
             imgui.set_tooltip("  " .. "Supports both keyboard and controller." .. "  ")
