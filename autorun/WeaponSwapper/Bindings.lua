@@ -66,6 +66,11 @@ local listener = {}
 --- cached_current_timer: How long to keep the current input check cached
 --- @return The listener object
 function listener:create(id, options)
+
+    if listeners[id] then
+        return listeners[id]
+    end
+
     local self = {}
     self.id = id
     self.listening = false
@@ -93,13 +98,10 @@ function listener:create(id, options)
     setmetatable(self, {
         __index = listener
     })
+    
+    listeners[id] = self
+    return self
 
-    if not listeners[id] then
-        listeners[id] = self
-        return self
-    else
-        return listeners[id]
-    end
 end
 
 --- Create a new listener with a timeout
