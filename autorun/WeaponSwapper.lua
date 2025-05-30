@@ -136,7 +136,7 @@ re.on_draw_ui(function()
                 end
             else
                 -- If listening, but no inputs have been started - display listening
-                hotkey_string = "Listening "..listen:get_timeout_remaining().." ... "
+                hotkey_string = "Listening... "
             end
             -- If not listening, display the hotkeys from the config
         elseif binding_config == nil or binding_config.hotkeys == nil then
