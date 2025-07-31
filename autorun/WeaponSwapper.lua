@@ -102,6 +102,9 @@ end
 -- On REFramework draw UI
 re.on_draw_ui(function()
     if imgui.collapsing_header("Weapon Swapper") then
+ 
+        imgui.push_style_var(12, 5.0) -- Rounded elements
+
         -- Create the binding listener
         local listen = bindings.listener:create("weaponswapper")
 
@@ -153,7 +156,7 @@ re.on_draw_ui(function()
 
         -- Display the hotkey string, and the change hotkey button
         imgui.push_id("WeaponSwapper")
-        imgui.indent(2)
+        imgui.indent(4)
 
         imgui.begin_disabled()
         imgui.input_text("", hotkey_string)
@@ -168,9 +171,27 @@ re.on_draw_ui(function()
             imgui.set_tooltip("  " .. "Supports both keyboard and controller." .. "  ")
         end
 
+        if imgui.tree_node("Settings") then
+
+            -- Allow in combat checkbox
+            if imgui.checkbox("Allow in combat", ALLOW_IN_COMBAT) then
+                ALLOW_IN_COMBAT = not ALLOW_IN_COMBAT
+                config.set("Allow in combat", ALLOW_IN_COMBAT)
+            end
+
+            -- Skip weapon ready animation checkbox
+            if imgui.checkbox("Skip weapon ready animation", SKIP_WEAPON_READY_ANIMATION) then
+                SKIP_WEAPON_READY_ANIMATION = not SKIP_WEAPON_READY_ANIMATION
+                config.set("Skip weapon ready animation", SKIP_WEAPON_READY_ANIMATION)
+            end
+
+            imgui.tree_pop()
+        end
+
         imgui.spacing()
-        imgui.unindent(2)
+        imgui.unindent(4)
         imgui.pop_id()
+        imgui.pop_style_var() -- Rounded elements
     end
 end)
 
