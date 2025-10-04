@@ -62,7 +62,7 @@ end
 local function request_swap_weapon()
     if not utils.getMasterCharacter() then return end -- Player is not in the game
     if not utils.getMasterCharacter():get_WeaponHandling() then return end -- No weapon handling available
-    if utils.is_in_battle() and not ALLOW_IN_COMBAT then return end -- In battle and not a cheater
+    if not ALLOW_IN_COMBAT and utils.is_in_battle() then return end -- Allowed in combat and not in battle
     if has_facility_menu_open() then return end -- Facility menu is open
     if utils.getMasterCharacter():get_IsInAllTent() then return end -- Player is in a tent
     if os.clock() - last_swap_time < cooldown then return end -- Cooldown not yet elapsed

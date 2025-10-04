@@ -25,11 +25,9 @@ end
 
 -- Check if the player is in battle
 function utils.is_in_battle()
-    if battle_music_manager == nil then
-        battle_music_manager = sound_manager:get_BattleMusic()
-    end
-    if battle_music_manager == nil then return false end
-    return battle_music_manager:get_IsBattle()
+    local character = utils.getMasterCharacter()
+    if not character then return false end
+    return character:get_IsCombat()
 end
 
 -- Generate an enum from a type name
