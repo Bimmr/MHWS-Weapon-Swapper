@@ -1,3 +1,5 @@
+-- Bindings version 0.0.2
+
 local controller_bindings = {}
 local keyboard_bindings = {}
 local bindings = {}
@@ -401,8 +403,8 @@ local to_replace_buttons = {
     ["RDown"] = {"X", "A"},
     ["RLeft"] = {"Square", "X"},
     ["RUp"] = {"Triangle", "Y"},
-    ["CLeft"] = {"Share", "Back"},
-    ["CRight"] = {"Start", "Start"},
+    ["CLeft"] = {"Share", "View"},
+    ["CRight"] = {"Start", "Menu"},
     ["CCenter"] = {"Touchpad", "Guide"},
     ["LTrigBottom"] = {"L2", "LT"},
     ["RTrigBottom"] = {"R2", "RT"},
