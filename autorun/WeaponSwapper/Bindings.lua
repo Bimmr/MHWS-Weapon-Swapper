@@ -1,11 +1,11 @@
--- Bindings version 0.0.2
+-- Bindings version 0.0.3
 
 local controller_bindings = {}
 local keyboard_bindings = {}
-local bindings = {}
+local Bindings = {}
 
 -- The delay to wait before checking the bindings again
-bindings.delay = 0.05
+Bindings.delay = 0.05
 
 
 -- Just helper variables to make device numbers easier
@@ -21,8 +21,8 @@ local CONTROLLER_TYPES = {
     XBOX = 2
 }
 
-bindings.DEVICE_TYPES = DEVICE_TYPES
-bindings.CONTROLLER_TYPES = CONTROLLER_TYPES
+Bindings.DEVICE_TYPES = DEVICE_TYPES
+Bindings.CONTROLLER_TYPES = CONTROLLER_TYPES
 
 --- Generate the enums for the bindings
 --- @param typename The name of the type to generate the enum for
@@ -50,7 +50,7 @@ end
 local listeners = {}
 
 -- ========== Example usage ============
--- local listener = bindings.listener:create("hotkey")
+-- local listener = Bindings.listener:create("hotkey")
 
 -- listener:on_complete(function()
 --     print("Complete")
@@ -180,7 +180,7 @@ function listener:update()
     -- Cache the current input for the delay - allows for easier setting/reading of binds
     local current = self.cached_current
     if self.cached_current_time + self.cached_current_timer < os.clock() then
-        current = bindings.get_current()
+        current = Bindings.get_current()
         self.cached_current = current
         self.cached_current_time = os.clock()
     end
@@ -191,8 +191,8 @@ function listener:update()
 
     if #current > 0 then
         self.inputs = current
-        if bindings.get_current_device() ~= DEVICE_TYPES.NONE then
-            self.device = bindings.get_current_device()
+        if Bindings.get_current_device() ~= DEVICE_TYPES.NONE then
+            self.device = Bindings.get_current_device()
         end
 
     elseif #current == 0 and self.inputs and #self.inputs > 0 then
@@ -227,8 +227,8 @@ function listener:get_timeout_remaining(decimals)
 end
 
 
-bindings.listeners = listeners
-bindings.listener = listener
+Bindings.listeners = listeners
+Bindings.listener = listener
 
 
 
@@ -264,8 +264,14 @@ function keyboard_bindings.get_current()
 
     -- Cache the keys for the delay - allows for easier setting/reading of binds
     if keyboard_bindings.current ~= nil and keyboard_bindings.current_last_check ~= nil and
-        keyboard_bindings.current_last_check + bindings.delay > os.clock() then
+        keyboard_bindings.current_last_check + Bindings.delay > os.clock() then
         return keyboard_bindings.current
+    end
+
+    if not keyboard:get_AnyKeyDown() then
+        keyboard_bindings.current = {}
+        keyboard_bindings.current_last_check = os.clock()
+        return {}
     end
 
     local current = {}
@@ -322,15 +328,13 @@ end
 --- @param data The table of keys to check
 --- @return true/false if the keys are currently pressed
 function keyboard_bindings.is_down(data)
-    local current = bindings.get_current()
+    local current = Bindings.get_current()
+    local current_set = {}
+    for _, code in pairs(current) do
+        current_set[code] = true
+    end
     for _, code in pairs(data) do
-        local found = false
-        for _, current_code in pairs(current) do
-            if current_code == code then
-                found = true
-            end
-        end
-        if not found then
+        if not current_set[code] then
             return false
         end
     end
@@ -419,7 +423,7 @@ local to_replace_buttons = {
 --- @return The controller type
 local function get_controller_type()
     if controller_type ~= 0 and controller_bindings.current_last_check ~= nil and
-        controller_bindings.current_last_check + bindings.delay > os.clock() then
+        controller_bindings.current_last_check + Bindings.delay > os.clock() then
         return controller_type
     end
 
@@ -562,7 +566,7 @@ function controller_bindings.get_current()
 
     -- Cache the buttons for the delay - allows for easier setting/reading of binds
     if controller_bindings.current ~= nil and controller_bindings.current_last_check ~= nil and
-        controller_bindings.current_last_check + bindings.delay > os.clock() then
+        controller_bindings.current_last_check + Bindings.delay > os.clock() then
         return controller_bindings.current
     end
 
@@ -587,19 +591,25 @@ function controller_bindings.is_triggered(data)
     local current = controller_bindings.get_current()
     local previous = controller_bindings.get_previous()
 
-    -- Check if in current all keys are pressed, and in previous either none or all but one
+    -- Create lookup tables for O(1) access
+    local current_set = {}
+    local previous_set = {}
+    for _, code in pairs(current) do
+        current_set[code] = true
+    end
+    for _, code in pairs(previous) do
+        previous_set[code] = true
+    end
+
+    -- Check if all keys are pressed in current, count matches in previous
     local matches = 0
     local previous_matches = 0
     for _, code in pairs(data) do
-        for _, current_code in pairs(current) do
-            if current_code == code then
-                matches = matches + 1
-            end
+        if current_set[code] then
+            matches = matches + 1
         end
-        for _, previous_code in pairs(previous) do
-            if previous_code == code then
-                previous_matches = previous_matches + 1
-            end
+        if previous_set[code] then
+            previous_matches = previous_matches + 1
         end
     end
 
@@ -673,7 +683,7 @@ end
 --- Add the keyboard bindings
 --- @param keys The keys to bind
 --- @param callback The function to call when the keys are pressed
-function bindings.add_keyboard(keys, callback)
+function Bindings.add_keyboard(keys, callback)
     local data = {
         input = keys,
         callback = callback
@@ -684,7 +694,7 @@ end
 --- Add the controller bindings
 --- @param buttons The buttons to bind
 --- @param callback The function to call when the buttons are pressed
-function bindings.add_controller(buttons, callback)
+function Bindings.add_controller(buttons, callback)
     local data = {
         input = buttons,
         callback = callback
@@ -696,35 +706,35 @@ end
 --- @param device The device to bind to (1 = Controller, 2 = Keyboard)
 --- @param input The input to bind
 --- @param callback The function to call when the input is pressed
-function bindings.add(device, input, callback)
+function Bindings.add(device, input, callback)
     if device == DEVICE_TYPES.CONTROLLER then
-        return bindings.add_controller(input, callback)
+        return Bindings.add_controller(input, callback)
     elseif device == DEVICE_TYPES.KEYBOARD then
-        return bindings.add_keyboard(input, callback)
+        return Bindings.add_keyboard(input, callback)
     end
     return false
 end
 
 --- Get the bindings for the keyboard
 --- @return An array of the keyboard bindings in {input, callback} format
-function bindings.get_keyboard_bindings()
+function Bindings.get_keyboard_bindings()
     return keyboard_bindings.bindings
 end
 
 --- Get the bindings for the controller
 --- @return An array of the controller bindings in {input, callback} format
-function bindings.get_controller_bindings()
+function Bindings.get_controller_bindings()
     return controller_bindings.bindings
 end
 
 --- Get the bindings depending on the device
 --- @param device The device to get the bindings for (1 = Controller, 2 = Keyboard)
 --- @return An array of the bindings in {input, callback} format
-function bindings.get_bindings(device)
+function Bindings.get_bindings(device)
     if device == DEVICE_TYPES.CONTROLLER then
-        return bindings.get_controller_bindings()
+        return Bindings.get_controller_bindings()
     elseif device == DEVICE_TYPES.KEYBOARD then
-        return bindings.get_keyboard_bindings()
+        return Bindings.get_keyboard_bindings()
     end
     return {}
 end
@@ -733,8 +743,8 @@ end
 --- @param device The device to get the binding for (1 = Controller, 2 = Keyboard)
 --- @param input The input to get the binding for
 --- @return The binding in {input, callback} format
-function bindings.get_binding(device, input)
-    local bindings_list = bindings.get_bindings(device)
+function Bindings.get_binding(device, input)
+    local bindings_list = Bindings.get_bindings(device)
     for _, binding in pairs(bindings_list) do
         if binding.input == input then
             return binding
@@ -748,8 +758,8 @@ end
 --- @param input The input to apply the data to
 --- @param data The data to apply to the binding
 --- @return true if the binding was found and data was applied, false otherwise
-function bindings.apply_data(device, input, data)
-   local binding = bindings.get_binding(device, input)
+function Bindings.apply_data(device, input, data)
+   local binding = Bindings.get_binding(device, input)
     
    if binding then
         for k, v in pairs(data) do
@@ -763,7 +773,7 @@ end
 
 --- Remove the keyboard binding
 --- @param keys The keys to unbind
-function bindings.remove_keyboard(keys)
+function Bindings.remove_keyboard(keys)
     for i, data in pairs(keyboard_bindings.bindings) do
         if data.input == keys then
             table.remove(keyboard_bindings.bindings, i)
@@ -773,7 +783,7 @@ end
 
 --- Remove the controller binding
 --- @param buttons The buttons to unbind
-function bindings.remove_controller(buttons)
+function Bindings.remove_controller(buttons)
     for i, data in pairs(controller_bindings.bindings) do
         if data.input == buttons then
             table.remove(controller_bindings.bindings, i)
@@ -784,33 +794,33 @@ end
 --- Remove the bindings depending on the device
 --- @param device The device to unbind from (1 = Controller, 2 = Keyboard)
 --- @param input The input to unbind
-function bindings.remove(device, input)
+function Bindings.remove(device, input)
     if device == DEVICE_TYPES.CONTROLLER then
-        bindings.remove_controller(input)
+        Bindings.remove_controller(input)
     elseif device == DEVICE_TYPES.KEYBOARD then
-        bindings.remove_keyboard(input)
+        Bindings.remove_keyboard(input)
     end
 end
 
 --- Check if the device is a keyboard
 --- @return true/false if the keyboard is currently in use
-function bindings.is_keyboard()
+function Bindings.is_keyboard()
     return keyboard_bindings.is_currently_in_use()
 end
 
 --- Check if the device is a controller
 --- @return true/false if the controller is currently in use
-function bindings.is_controller()
+function Bindings.is_controller()
     return controller_bindings.is_currently_in_use()
 end
 
 --- Get the current device type
 --- @return The device type (0 = None, 1 = Controller, 2 = Keyboard)
-function bindings.get_current_device()
-    if bindings.is_keyboard() then
+function Bindings.get_current_device()
+    if Bindings.is_keyboard() then
         return DEVICE_TYPES.KEYBOARD
     end
-    if bindings.is_controller() then
+    if Bindings.is_controller() then
         return DEVICE_TYPES.CONTROLLER
     end
     return DEVICE_TYPES.NONE
@@ -819,11 +829,11 @@ end
 --- Get the current bindings
 --- @return The current bindings in an array of {name, code} depending on the current device
 --- Returns an empty array if no bindings are found
-function bindings.get_current()
-    if bindings.is_keyboard() then
+function Bindings.get_current()
+    if Bindings.is_keyboard() then
         return keyboard_bindings.get_current()
     end
-    if bindings.is_controller() then
+    if Bindings.is_controller() then
         return controller_bindings.get_current()
     end
     return {}
@@ -831,7 +841,7 @@ end
 
 --- Get the controller type
 --- @return The controller type (0 = None, 1 = Playstation, 2 = Xbox)
-function bindings.get_controller_type()
+function Bindings.get_controller_type()
     return controller_type
 end
 
@@ -840,7 +850,7 @@ end
 --- @param code The code of the key or button
 --- @return The name of the key or button in {name, code} format
 --- Returns "Unknown" if not found
-function bindings.get_name(device, code)
+function Bindings.get_name(device, code)
     if device == DEVICE_TYPES.CONTROLLER then
         return controller_bindings.get_name(code)
     elseif device == DEVICE_TYPES.KEYBOARD then
@@ -853,7 +863,7 @@ end
 --- @param codes The array of codes to get the names for
 --- @return An array of the keys or buttons in {name, code} format
 --- Returns "Unknown" if not found
-function bindings.get_names(device, codes)
+function Bindings.get_names(device, codes)
     if device == DEVICE_TYPES.CONTROLLER then
         return controller_bindings.get_names(codes)
     elseif device == DEVICE_TYPES.KEYBOARD then
@@ -866,7 +876,7 @@ end
 --- @param name The name of the key or button
 --- @return The code of the key or button
 --- Returns -1 if not found
-function bindings.get_code_from_name(device, name)
+function Bindings.get_code_from_name(device, name)
     if device == DEVICE_TYPES.CONTROLLER then
         return controller_bindings.get_code_from_name(name)
     elseif device == DEVICE_TYPES.KEYBOARD then
@@ -878,7 +888,7 @@ end
 --- @param input The input to get the callback for
 --- @return The callback function for the input
 --- Returns nil if not found
-function bindings.get_keyboard_callback(input)
+function Bindings.get_keyboard_callback(input)
     for _, data in pairs(keyboard_bindings.bindings) do
         if data.input == input then
             return data.data
@@ -891,7 +901,7 @@ end
 --- @param input The input to get the callback for
 --- @return The callback function for the input
 --- Returns nil if not found
-function bindings.get_controller_callback(input)
+function Bindings.get_controller_callback(input)
     for _, data in pairs(controller_bindings.bindings) do
         if data.input == input then
             return data.data
@@ -905,11 +915,11 @@ end
 --- @param input The input to get the callback for
 --- @return The callback function for the input
 --- Returns nil if not found
-function bindings.get_callback(device, input)
+function Bindings.get_callback(device, input)
     if device == DEVICE_TYPES.CONTROLLER then
-        return bindings.get_controller_callback(input)
+        return Bindings.get_controller_callback(input)
     elseif device == DEVICE_TYPES.KEYBOARD then
-        return bindings.get_keyboard_callback(input)
+        return Bindings.get_keyboard_callback(input)
     else
         return nil
     end
@@ -917,8 +927,8 @@ end
 
 --- Update the bindings and run the callback if the input is triggered
 --- Run this function in re.on_frame
-function bindings.update()
-    if bindings.is_keyboard() then
+function Bindings.update()
+    if Bindings.is_keyboard() then
         for _, data in pairs(keyboard_bindings.bindings) do
             if keyboard_bindings.is_triggered(data.input) then
                 data.callback()
@@ -926,7 +936,7 @@ function bindings.update()
         end
     end
 
-    if bindings.is_controller() then
+    if Bindings.is_controller() then
         for _, data in pairs(controller_bindings.bindings) do
             if controller_bindings.is_triggered(data.input) then
                 data.callback()
@@ -934,7 +944,7 @@ function bindings.update()
         end
     end
 
-    for _, listener in pairs(bindings.listeners) do
+    for _, listener in pairs(Bindings.listeners) do
         listener:update()
     end
 
@@ -943,4 +953,4 @@ function bindings.update()
     keyboard_bindings.previous = keyboard_bindings.get_current()
 end
 
-return bindings
+return Bindings
