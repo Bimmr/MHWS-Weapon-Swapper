@@ -1,6 +1,6 @@
 # ⚔️ Weapon Swapper – Monster Hunter: Wilds Mod
 
-![REFramework](https://img.shields.io/badge/REFramework-Required-red) ![Version](https://img.shields.io/badge/Version-0.0.8-blue)
+![REFramework](https://img.shields.io/badge/REFramework-Required-red)
 
 Set up a hotkey to instantly switch between your main weapon and your reserve weapon on demand in **Monster Hunter: Wilds** using **REFramework**. Perfect for quality‑of‑life weapon switching without having to use your Seikret.
 
