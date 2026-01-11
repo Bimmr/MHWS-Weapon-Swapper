@@ -1,15 +1,9 @@
 local utils = {}
 
-local sound_manager = sdk.get_managed_singleton("app.SoundMusicManager")
-
-local player_manager
-local battle_music_manager
+local player_manager = sdk.get_managed_singleton("app.PlayerManager")
 
 -- Get the Master Player
 function utils.getMasterPlayerInfo()
-    if not player_manager then
-        player_manager = sdk.get_managed_singleton("app.PlayerManager")
-    end
     local player = player_manager:getMasterPlayerInfo()
     return player
 end
