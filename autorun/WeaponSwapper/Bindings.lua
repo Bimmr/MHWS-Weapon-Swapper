@@ -1,4 +1,4 @@
--- Bindings version 0.0.3
+-- Bindings version 0.0.4
 
 local controller_bindings = {}
 local keyboard_bindings = {}
@@ -68,6 +68,7 @@ local listener = {}
 --- @param [options] The options for the listener
 --- timeout_timer: The timeout for the listener in seconds
 --- cached_current_timer: How long to keep the current input check cached
+--- completion_delay: How long to wait after releasing buttons before completing (default: 0.15)
 --- @return The listener object
 function listener:create(id, options)
 
@@ -91,6 +92,12 @@ function listener:create(id, options)
     self.timeout_timer = nil
     self.timeout_start_time = 0
     self.timeout = function() end
+    
+    -- Release grace period: how long to wait before removing a released key (default: 200ms)
+    self.release_grace_period = 0.2
+    
+    -- Tracks keys pending release: {code = release_time}
+    self.pending_releases = {}
 
     -- iterate through options and set them
     if options then
@@ -124,6 +131,7 @@ end
 function listener:start()
     self.listening = true
     self.inputs = {}
+    self.pending_releases = {}
     if self.timeout_timer then
         self.timeout_start_time = os.clock()
     end
@@ -189,15 +197,78 @@ function listener:update()
         return
     end
 
+    local now = os.clock()
+    
+    -- Build a lookup table of currently pressed keys for quick access
+    -- Note: current is an array of codes (numbers), not objects
+    local current_pressed = {}
+    for _, code in ipairs(current) do
+        current_pressed[code] = true
+    end
+    
+    -- Process currently pressed keys
     if #current > 0 then
-        self.inputs = current
+        -- Set device type
         if Bindings.get_current_device() ~= DEVICE_TYPES.NONE then
             self.device = Bindings.get_current_device()
         end
-
-    elseif #current == 0 and self.inputs and #self.inputs > 0 then
+        
+        -- Add any new keys to inputs and remove from pending releases
+        for _, code in ipairs(current) do
+            -- Remove from pending releases if it was pending
+            if self.pending_releases[code] then
+                self.pending_releases[code] = nil
+            end
+            
+            -- Add to inputs if not already present
+            local already_exists = false
+            for _, existing_code in ipairs(self.inputs) do
+                if existing_code == code then
+                    already_exists = true
+                    break
+                end
+            end
+            
+            if not already_exists then
+                table.insert(self.inputs, code)
+            end
+        end
+    end
+    
+    -- Check for released keys and mark them as pending release
+    for i = #self.inputs, 1, -1 do
+        local code = self.inputs[i]
+        
+        if not current_pressed[code] then
+            -- Key was released
+            if not self.pending_releases[code] then
+                -- Mark as pending release with timestamp
+                self.pending_releases[code] = now
+            end
+        end
+    end
+    
+    -- Check if nothing is currently pressed and we have inputs to report
+    if #current == 0 and #self.inputs > 0 then
+        -- All keys released, complete immediately
         self.listening = false
         self.complete()
+        return
+    end
+    
+    -- Clean up keys that have been pending too long (exceeded grace period)
+    -- This removes accidental taps that were released quickly
+    for code, release_time in pairs(self.pending_releases) do
+        if now - release_time >= self.release_grace_period then
+            -- Grace period expired, remove from inputs
+            for i = #self.inputs, 1, -1 do
+                if self.inputs[i] == code then
+                    table.remove(self.inputs, i)
+                    break
+                end
+            end
+            self.pending_releases[code] = nil
+        end
     end
 
     -- Check if the timeout time has passed
@@ -290,6 +361,9 @@ end
 --- @param data The table of keys to check
 --- @return true/false if the keys were just triggered
 function keyboard_bindings.is_triggered(data)
+    if not data or type(data) ~= "table" then
+        return false
+    end
 
     local current = keyboard_bindings.get_current()
     local previous = keyboard_bindings.get_previous()
@@ -588,6 +662,10 @@ end
 --- @param data The table of buttons to check
 --- @return true/false if the buttons were just triggered
 function controller_bindings.is_triggered(data)
+    if not data or type(data) ~= "table" then
+        return false
+    end
+    
     local current = controller_bindings.get_current()
     local previous = controller_bindings.get_previous()
 
