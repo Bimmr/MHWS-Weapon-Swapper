@@ -71,11 +71,6 @@ local function request_swap_weapon()
 end
 
 --------------------------------------- Config ------------------------------------
-if config.get("I am a Cheater") ~= nil then
-    ALLOW_IN_COMBAT = config.get("I am a Cheater") -- Get the value from the config
-    config.set("I am a Cheater", nil) -- Remove the old config value if it exists
-end
-
 ALLOW_IN_COMBAT = config.get("Allow in combat") or ALLOW_IN_COMBAT -- Either get it from the config or from the default value
 config.set("Allow in combat", ALLOW_IN_COMBAT)
 
@@ -84,17 +79,15 @@ config.set("Skip weapon ready animation", SKIP_WEAPON_READY_ANIMATION)
 
 local binding_config = config.get("swapkey")
 if binding_config then
-    -- Ensure hotkeys are numeric codes. If not, convert them to numeric codes
-    if type(binding_config.hotkeys[1]) ~= "number" then
-        local device = binding_config.device
-        binding_config.hotkeys = utils.map(binding_config.hotkeys, function(hotkey)
-            return bindings.get_code_from_name(device, hotkey)
-        end)
-        config.set("swapkey", binding_config)
+
+    -- convert previously named hotkeys to keybinds
+    if binding_config.hotkeys then 
+        binding_config.keybinds = binding_config.hotkeys
+        binding_config.hotkeys = nil 
     end
 
     -- Add the binding
-    bindings.add(binding_config.device, binding_config.hotkeys, request_swap_weapon)
+    bindings.add(binding_config.device, binding_config.keybinds, request_swap_weapon)
 end
 
 ------------------------------------ REFramework ------------------------------------
@@ -108,63 +101,63 @@ re.on_draw_ui(function()
         -- Create the binding listener
         local listen = bindings.listener:create("weaponswapper")
 
-        -- On listener complete set the new hotkeys
+        -- On listener complete set the new keybinds
         listen:on_complete(function()
             -- Remove the old binding
             if binding_config ~= nil then
-                bindings.remove(binding_config.device, binding_config.hotkeys)
+                bindings.remove(binding_config.device, binding_config.keybinds)
             end
 
             -- Set the new binding
             binding_config = {
-                hotkeys = listen:get_inputs(),
+                keybinds = listen:get_inputs(),
                 device = listen:get_device()
             }
 
             -- Add the new binding, and save it to the config
-            bindings.add(binding_config.device, binding_config.hotkeys, request_swap_weapon)
+            bindings.add(binding_config.device, binding_config.keybinds, request_swap_weapon)
             config.set("swapkey", binding_config)
         end)
 
-        -- Create the hotkey string
-        local hotkey_string = ""
+        -- Create the keybind string
+        local keybind_string = ""
 
         if listen:is_listening() then
-            -- If listening, and inputs have been started - display the hotkeys being pressed
+            -- If listening, and inputs have been started - display the keybinds being pressed
             if #listen:get_inputs() ~= 0 then
                 local inputs = listen:get_inputs()
                 inputs = bindings.get_names(listen:get_device(), inputs)
                 for _, input in ipairs(inputs) do
-                    hotkey_string = hotkey_string .. input.name .. " + "
+                    keybind_string = keybind_string .. input.name .. " + "
                 end
             else
                 -- If listening, but no inputs have been started - display listening
-                hotkey_string = "Listening... "
+                keybind_string = "Listening... "
             end
-            -- If not listening, display the hotkeys from the config
-        elseif binding_config == nil or binding_config.hotkeys == nil then
-            hotkey_string = "Not Set"
+            -- If not listening, display the keybinds from the config
+        elseif binding_config == nil or binding_config.keybinds == nil then
+            keybind_string = "Not Set"
         else
-            local inputs = bindings.get_names(binding_config.device, binding_config.hotkeys)
+            local inputs = bindings.get_names(binding_config.device, binding_config.keybinds)
             for i, input in ipairs(inputs) do
-                hotkey_string = hotkey_string .. input.name
+                keybind_string = keybind_string .. input.name
                 if i < #inputs then
-                    hotkey_string = hotkey_string .. " + "
+                    keybind_string = keybind_string .. " + "
                 end
             end
         end
 
-        -- Display the hotkey string, and the change hotkey button
+        -- Display the keybind string, and the change keybind button
         imgui.push_id("WeaponSwapper")
         imgui.indent(4)
 
         imgui.begin_disabled()
-        imgui.input_text("", hotkey_string)
+        imgui.input_text("", keybind_string)
         imgui.end_disabled()
         imgui.same_line()
 
-        -- When the change hotkey button is pressed, start listening for a new hotkey
-        if imgui.button("Change Hotkey") then
+        -- When the change keybind button is pressed, start listening for a new keybind
+        if imgui.button("Change Keybind") then
             listen:start()
         end
         if imgui.is_item_hovered() then
